@@ -4,11 +4,11 @@ Lightweight Jira RAB automation webhook service built with FastAPI.
 
 ## Overview
 
-This service receives Jira webhook events, validates them against a shared secret, extracts the issue key, and delegates processing to an orchestration layer. Currently in **Phase 1** — the orchestrator is a stub returning `"queued_for_processing"`.
+This service receives Jira webhook events, extracts the issue key, and delegates processing to an orchestration layer. Currently in **Phase 1**: the orchestrator is a stub returning `"queued_for_processing"`.
 
 ## Project Structure
 
-```
+```text
 rab-automation/
   app/
     main.py              # FastAPI entry point
@@ -48,17 +48,17 @@ Copy the example env file and fill in your values:
 cp .env.example .env
 ```
 
-Or export the required secret directly:
+Or export the required webhook URL directly:
 
 ```bash
 # Linux / macOS
-export JIRA_WEBHOOK_SHARED_SECRET=your-secret-here
+export JIRA_WEBHOOK_URL=http://localhost:8000/webhooks/jira
 
 # Windows PowerShell
-$env:JIRA_WEBHOOK_SHARED_SECRET = "your-secret-here"
+$env:JIRA_WEBHOOK_URL = "http://localhost:8000/webhooks/jira"
 ```
 
-The only **required** variable for this phase is `JIRA_WEBHOOK_SHARED_SECRET`.
+The only **required** variable for this phase is `JIRA_WEBHOOK_URL`.
 
 ### 3. Run locally
 
@@ -97,15 +97,22 @@ Response:
 ### Jira webhook
 
 ```bash
-curl -X POST http://localhost:8000/webhooks/jira \
+curl -X POST "$JIRA_WEBHOOK_URL" \
   -H "Content-Type: application/json" \
-  -H "X-RAB-Automation-Secret: your-secret-here" \
   -d '{
     "webhookEvent": "jira:issue_created",
     "issue": {
       "key": "ABC-123"
     }
   }'
+```
+
+On Windows PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri $env:JIRA_WEBHOOK_URL `
+  -ContentType "application/json" `
+  -Body '{"webhookEvent":"jira:issue_created","issue":{"key":"ABC-123"}}'
 ```
 
 Response:
@@ -125,11 +132,11 @@ Response:
 pytest
 ```
 
-Tests use monkeypatched environment variables — no `.env` file required.
+Tests use monkeypatched environment variables; no `.env` file required.
 
 ## Next Phase
 
-- **Phase 2**: Jira API integration — fetch issue details, parse PR links
-- **Phase 3**: Azure DevOps integration — read PR diffs
-- **Phase 4**: SharePoint integration — write RAB entries
+- **Phase 2**: Jira API integration: fetch issue details, parse PR links
+- **Phase 3**: Azure DevOps integration: read PR diffs
+- **Phase 4**: SharePoint integration: write RAB entries
 - **Phase 5**: Power Automate / Teams notifications

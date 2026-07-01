@@ -16,27 +16,27 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # ── Core ──────────────────────────────────────────────────────────
+    # Core
     APP_NAME: str = "rab-automation"
     APP_ENV: str = "local"
     LOG_LEVEL: str = "INFO"
 
-    # ── Required: Webhook security ────────────────────────────────────
-    JIRA_WEBHOOK_SHARED_SECRET: str
+    # Required: Jira webhook endpoint
+    JIRA_WEBHOOK_URL: str
 
-    # ── Optional: Jira API (future phases) ────────────────────────────
+    # Optional: Jira API (future phases)
     JIRA_BASE_URL: str | None = None
     JIRA_EMAIL: str | None = None
     JIRA_API_TOKEN: str | None = None
 
-    # ── Optional: Azure DevOps (future phases) ────────────────────────
+    # Optional: Azure DevOps (future phases)
     AZURE_DEVOPS_PAT: str | None = None
 
-    # ── Optional: SharePoint (future phases) ──────────────────────────
+    # Optional: SharePoint (future phases)
     SHAREPOINT_SITE_ID: str | None = None
     SHAREPOINT_LIST_ID: str | None = None
 
 
 def get_settings() -> Settings:
-    """Return a cached Settings instance (pydantic-settings handles caching)."""
+    """Return a Settings instance."""
     return Settings()

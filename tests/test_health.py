@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture(autouse=True)
 def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ensure required env vars are set for the test app."""
-    monkeypatch.setenv("JIRA_WEBHOOK_SHARED_SECRET", "test-secret")
+    monkeypatch.setenv("JIRA_WEBHOOK_URL", "http://testserver/webhooks/jira")
     monkeypatch.setenv("APP_ENV", "test")
 
 

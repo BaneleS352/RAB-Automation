@@ -3,16 +3,6 @@
 from fastapi import HTTPException, status
 
 
-class UnauthorizedError(HTTPException):
-    """Raised when webhook secret validation fails."""
-
-    def __init__(self) -> None:
-        super().__init__(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-        )
-
-
 class MissingIssueKeyError(HTTPException):
     """Raised when the Jira webhook payload is missing an issue key."""
 
