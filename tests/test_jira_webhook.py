@@ -26,6 +26,17 @@ def client() -> TestClient:
     return TestClient(create_app())
 
 
+@pytest.fixture(autouse=True)
+def mock_jira_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mock the JiraClient's get_issue method."""
+    from app.services.jira_client import JiraClient
+    
+    async def mock_get_issue(self, issue_key: str):
+        return {"id": "10000", "key": issue_key, "fields": {"summary": "Test issue"}}
+    
+    monkeypatch.setattr(JiraClient, "get_issue", mock_get_issue)
+
+
 class TestJiraWebhookSuccess:
     """Valid webhook requests."""
 
