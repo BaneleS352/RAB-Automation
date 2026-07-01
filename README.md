@@ -48,16 +48,6 @@ Copy the example env file and fill in your values:
 cp .env.example .env
 ```
 
-Or export the required secret directly:
-
-```bash
-# Linux / macOS
-export JIRA_WEBHOOK_SHARED_SECRET=your-secret-here
-
-# Windows PowerShell
-$env:JIRA_WEBHOOK_SHARED_SECRET = "your-secret-here"
-```
-
 The only **required** variable for this phase is `JIRA_WEBHOOK_SHARED_SECRET`.
 
 ### 3. Run locally
