@@ -1,7 +1,5 @@
 """Tests for the health and root endpoints."""
 
-import os
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -13,10 +11,21 @@ def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
 
 
+@pytest.fixture(autouse=True)
+def _mock_jira_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mock JiraClient.check_connection to avoid real network calls."""
+
+    async def mock_check_connection(self) -> dict:
+        return {"connected": True, "details": "Jira API is reachable and authenticated."}
+
+    from app.services.jira_client import JiraClient
+
+    monkeypatch.setattr(JiraClient, "check_connection", mock_check_connection)
+
+
 @pytest.fixture()
 def client() -> TestClient:
     """Create a fresh TestClient for each test."""
-    # Import inside fixture so env vars from monkeypatch are active
     from app.main import create_app
 
     return TestClient(create_app())
@@ -40,6 +49,11 @@ class TestHealthEndpoint:
     def test_response_contains_environment(self, client: TestClient) -> None:
         data = client.get("/health").json()
         assert data["environment"] == "test"
+
+    def test_response_contains_jira_connection(self, client: TestClient) -> None:
+        data = client.get("/health").json()
+        assert data["jira"]["connected"] is True
+        assert "Jira API is reachable and authenticated." in data["jira"]["details"]
 
 
 class TestRootEndpoint:

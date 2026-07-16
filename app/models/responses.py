@@ -3,12 +3,20 @@
 from pydantic import BaseModel
 
 
+class JiraConnectionInfo(BaseModel):
+    """Jira API connection status."""
+
+    connected: bool
+    details: str
+
+
 class HealthResponse(BaseModel):
     """Response model for the health check endpoint."""
 
     status: str
     service: str
     environment: str
+    jira: JiraConnectionInfo | None = None
 
 
 class RootResponse(BaseModel):

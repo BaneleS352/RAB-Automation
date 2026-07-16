@@ -55,3 +55,35 @@ class JiraClient:
         except httpx.RequestError as e:
             logger.error("Network error while fetching issue %s: %s", issue_key, e)
             raise JiraClientError(f"Network error while fetching issue {issue_key}") from e
+
+    async def check_connection(self) -> dict:
+        """Verify connectivity to the Jira API.
+
+        Returns:
+            A dict with 'connected' (bool) and 'details' (str).
+        """
+        if not self.base_url or not self.email or not self.api_token:
+            return {
+                "connected": False,
+                "details": "Jira API credentials or base URL are not configured.",
+            }
+
+        url = f"{self.base_url.rstrip('/')}/rest/api/3/myself"
+        auth = httpx.BasicAuth(self.email, self.api_token)
+        headers = {"Accept": "application/json"}
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(url, auth=auth, headers=headers, timeout=10)
+                response.raise_for_status()
+                return {"connected": True, "details": "Jira API is reachable and authenticated."}
+        except httpx.HTTPStatusError as e:
+            return {
+                "connected": False,
+                "details": f"Jira API returned HTTP {e.response.status_code}: {e.response.text[:200]}",
+            }
+        except httpx.RequestError as e:
+            return {
+                "connected": False,
+                "details": f"Network error: {e}",
+            }
