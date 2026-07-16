@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Health — RAB Automation{% endblock %}
+{% block content %}
+<h1>Service Health</h1>
+<div class="health-grid">
+    {% for name, info in services.items() %}
+    <div class="health-card {{ 'status-ok' if info.connected else 'status-fail' }}">
+        <h2>{{ name }}</h2>
+        <div class="status-badge">{{ 'Connected' if info.connected else 'Disconnected' }}</div>
+        <p class="detail">{{ info.details }}</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

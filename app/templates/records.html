@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Audit Records — RAB Automation{% endblock %}
+{% block content %}
+<h1>RAB Audit Records</h1>
+{% if records %}
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Issue Key</th>
+                <th>Status</th>
+                <th>SDL Approval</th>
+                <th>SDM Approval</th>
+                <th>Validation</th>
+                <th>Meeting Needed</th>
+                <th>Updated</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in records %}
+            <tr>
+                <td><strong>{{ r.issue_key }}</strong></td>
+                <td>
+                    <span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span>
+                </td>
+                <td>
+                    <span class="badge badge-{{ r.sdl_approval }}">{{ r.sdl_approval }}</span>
+                </td>
+                <td>
+                    <span class="badge badge-{{ r.sdm_approval }}">{{ r.sdm_approval }}</span>
+                </td>
+                <td><small>{{ r.validation_result[:60] }}{% if r.validation_result|length > 60 %}…{% endif %}</small></td>
+                <td>{{ 'Yes' if r.meeting_needed else 'No' }}</td>
+                <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">No audit records found.</p>
+{% endif %}
+{% endblock %}

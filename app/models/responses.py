@@ -17,6 +17,8 @@ class HealthResponse(BaseModel):
     service: str
     environment: str
     jira: JiraConnectionInfo | None = None
+    azure_devops: JiraConnectionInfo | None = None
+    teams: JiraConnectionInfo | None = None
 
 
 class RootResponse(BaseModel):
@@ -33,3 +35,4 @@ class JiraWebhookResponse(BaseModel):
     issue_key: str
     event_type: str | None = None
     result: str
+    idempotent_replay: bool = False
