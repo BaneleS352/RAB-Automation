@@ -17,7 +17,7 @@ def _mock_connections(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.services.teams_client import TeamsClient
 
     async def mock_check(self):
-        return True
+        return {"connected": True, "details": "Mock connection OK"}
     monkeypatch.setattr(JiraClient, "check_connection", mock_check)
     monkeypatch.setattr(AzureDevOpsClient, "check_connection", mock_check)
     monkeypatch.setattr(TeamsClient, "check_connection", mock_check)

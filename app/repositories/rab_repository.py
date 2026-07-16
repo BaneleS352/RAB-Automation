@@ -3,14 +3,31 @@
 import logging
 from datetime import datetime, timezone
 
+from aiosqlite import IntegrityError
+
 from app.database import get_db
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_RAB_COLUMNS = frozenset({
+    "issue_key", "summary", "status", "validation_result",
+    "sdl_approval", "sdm_approval",
+    "rejection_reason", "rejected_by", "meeting_needed",
+    "azure_pr_status", "azure_pipeline_status",
+})
+
+ALLOWED_EVENT_COLUMNS = frozenset({"issue_key", "step", "action", "approver", "reason"})
+
 
 class RabRepository:
 
+    def _validate_columns(self, data: dict, allowed: frozenset) -> None:
+        bad = [k for k in data if k not in allowed]
+        if bad:
+            raise ValueError(f"Invalid column names: {bad}")
+
     async def upsert_record(self, issue_key: str, data: dict) -> int:
+        self._validate_columns(data, ALLOWED_RAB_COLUMNS)
         db = await get_db()
         existing = await db.execute_fetchall(
             "SELECT id FROM rab_records WHERE issue_key = ?", (issue_key,)
@@ -38,7 +55,6 @@ class RabRepository:
 
     async def record_validation(self, issue_key: str, valid: bool, detail: str = "") -> None:
         await self.upsert_record(issue_key, {
-            "issue_key": issue_key,
             "status": "validated" if valid else "validation_failed",
             "validation_result": detail,
         })
@@ -47,6 +63,7 @@ class RabRepository:
         self, issue_key: str, step: str, action: str,
         approver: str = "", reason: str = "",
     ) -> None:
+        self._validate_columns({"step": step, "action": action}, ALLOWED_EVENT_COLUMNS)
         db = await get_db()
         await db.execute(
             "INSERT INTO approval_events (issue_key, step, action, approver, reason) VALUES (?, ?, ?, ?, ?)",
@@ -56,6 +73,8 @@ class RabRepository:
 
         status_map = {"approve": "approved", "reject": "rejected"}
         col = f"{step.lower()}_approval"
+        if col not in ALLOWED_RAB_COLUMNS:
+            raise ValueError(f"Invalid approval column: {col}")
         await db.execute(
             f"UPDATE rab_records SET {col} = ?, rejection_reason = ?, rejected_by = ?, status = ?, updated_at = ? WHERE issue_key = ?",
             (status_map.get(action, action), reason, approver, f"{step.lower()}_{action}d", datetime.now(timezone.utc).isoformat(), issue_key),
@@ -71,9 +90,13 @@ class RabRepository:
             )
             await db.commit()
             return True
-        except Exception:
+        except IntegrityError:
             await db.rollback()
             return False
+        except Exception:
+            await db.rollback()
+            logger.exception("Unexpected error recording webhook event")
+            raise
 
     async def get_all_records(self, limit: int = 50, offset: int = 0) -> list[dict]:
         db = await get_db()
@@ -82,6 +105,16 @@ class RabRepository:
             (limit, offset),
         )
         return [dict(r) for r in rows]
+
+    async def get_all_records_with_count(self, limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
+        db = await get_db()
+        count_row = await db.execute_fetchall("SELECT COUNT(*) FROM rab_records")
+        total = count_row[0][0] if count_row else 0
+        rows = await db.execute_fetchall(
+            "SELECT * FROM rab_records ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        )
+        return [dict(r) for r in rows], total
 
     async def get_record(self, issue_key: str) -> dict | None:
         db = await get_db()

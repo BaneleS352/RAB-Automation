@@ -2,7 +2,6 @@
 
 import time
 
-from starlette.datastructures import Headers
 from fastapi import APIRouter
 from pydantic import BaseModel
 

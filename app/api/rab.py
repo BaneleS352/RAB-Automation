@@ -38,8 +38,8 @@ async def list_records(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
-    rows = await _repo.get_all_records(limit=limit, offset=offset)
-    return RabRecordList(records=[RabRecord(**r) for r in rows], total=len(rows))
+    rows, total = await _repo.get_all_records_with_count(limit=limit, offset=offset)
+    return RabRecordList(records=[RabRecord(**r) for r in rows], total=total)
 
 
 @router.get("/records/{issue_key}", response_model=RabRecord | None)

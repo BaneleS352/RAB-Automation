@@ -1,4 +1,5 @@
 import logging
+import time
 from dataclasses import dataclass, field
 
 import httpx
@@ -42,12 +43,13 @@ class TeamsClient:
         self.app_id = self.settings.TEAMS_BOT_APP_ID
         self.client_secret = self.settings.TEAMS_BOT_CLIENT_SECRET
         self._token: str | None = None
+        self._token_expiry: float = 0
 
     def _is_configured(self) -> bool:
         return bool(self.app_id and self.client_secret)
 
     async def _get_token(self) -> str:
-        if self._token:
+        if self._token and time.time() < self._token_expiry - 60:
             return self._token
         url = "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token"
         data = {
@@ -62,6 +64,7 @@ class TeamsClient:
                 resp.raise_for_status()
                 result = resp.json()
                 self._token = result["access_token"]
+                self._token_expiry = time.time() + result.get("expires_in", 3600)
                 return self._token
         except httpx.RequestError as e:
             raise TeamsClientError(f"Failed to get Bot Framework token: {e}") from e

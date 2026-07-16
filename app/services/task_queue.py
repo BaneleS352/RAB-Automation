@@ -75,14 +75,14 @@ class TaskQueue:
             logger.info("Task queue worker started (max_concurrent=%s)", self._max_concurrent)
 
     async def stop(self) -> None:
-        if self._worker_task:
+        if self._worker_task and not self._worker_task.done():
             self._worker_task.cancel()
             try:
                 await self._worker_task
             except asyncio.CancelledError:
                 pass
-            self._worker_task = None
-            logger.info("Task queue worker stopped")
+        self._worker_task = None
+        logger.info("Task queue worker stopped")
 
     def get_task(self, task_id: str) -> Task | None:
         return self._tasks.get(task_id)

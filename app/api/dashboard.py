@@ -25,14 +25,14 @@ _teams = TeamsClient()
 
 @router.get("/health", response_class=HTMLResponse)
 async def dashboard_health(request: Request):
-    jira_ok = await _jira.check_connection()
-    azure_ok = await _azure.check_connection()
-    teams_ok = await _teams.check_connection()
+    jira_status = await _jira.check_connection()
+    azure_status = await _azure.check_connection()
+    teams_status = await _teams.check_connection()
 
     services = {
-        "jira": {"connected": jira_ok, "details": "Jira Cloud API" if jira_ok else "Not connected or unconfigured"},
-        "azure_devops": {"connected": azure_ok, "details": "Azure DevOps API" if azure_ok else "Not connected or unconfigured"},
-        "teams": {"connected": teams_ok, "details": "Microsoft Teams Bot Framework" if teams_ok else "Not connected or unconfigured"},
+        "jira": {"connected": jira_status.get("connected", False), "details": jira_status.get("details", "Unknown")},
+        "azure_devops": {"connected": azure_status.get("connected", False), "details": azure_status.get("details", "Unknown")},
+        "teams": {"connected": teams_status.get("connected", False), "details": teams_status.get("details", "Unknown")},
     }
 
     return templates.TemplateResponse(request, "health.html", {"services": services})

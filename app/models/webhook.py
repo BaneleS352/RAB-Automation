@@ -1,6 +1,11 @@
 """Pydantic models for Jira webhook payloads."""
 
-from pydantic import BaseModel
+import re
+
+from pydantic import BaseModel, Field, field_validator
+
+
+ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]+-\d+$")
 
 
 class JiraIssuePayload(BaseModel):
@@ -8,7 +13,14 @@ class JiraIssuePayload(BaseModel):
 
     model_config = {"extra": "allow"}
 
-    key: str | None = None
+    key: str | None = Field(None, max_length=128, description="Jira issue key, e.g. PROJ-123")
+
+    @field_validator("key")
+    @classmethod
+    def validate_issue_key(cls, v: str | None) -> str | None:
+        if v is not None and not ISSUE_KEY_PATTERN.match(v):
+            raise ValueError(f"Invalid issue key format: {v}")
+        return v
 
 
 class JiraWebhookPayload(BaseModel):

@@ -5,13 +5,11 @@ import uuid
 
 from app.repositories.rab_repository import RabRepository
 from app.services.approval_service import ApprovalService, ApprovalStep
-from app.services.azure_devops_client import AzureDevOpsClient, AzureDevOpsClientError
 from app.services.card_templates import (
     approval_request_card,
     developer_notification_card,
     meeting_decision_card,
     rejection_notification_card,
-    validation_failed_card,
     validation_passed_card,
 )
 from app.services.field_validator import FieldValidator
@@ -25,7 +23,6 @@ class RabOrchestrator:
     def __init__(self) -> None:
         self.jira_client = JiraClient()
         self.field_validator = FieldValidator()
-        self.azure_client = AzureDevOpsClient()
         self.teams_client = TeamsClient()
         self.approval_service = ApprovalService()
         self.rab_repo = RabRepository()
