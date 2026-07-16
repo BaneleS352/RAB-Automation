@@ -13,8 +13,10 @@ import argparse
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 
 
 async def try_classic(base_url: str, email: str, token: str) -> dict:
@@ -28,9 +30,13 @@ async def try_classic(base_url: str, email: str, token: str) -> dict:
             if resp.status_code == 200:
                 data = resp.json()
                 return {"type": "classic", "detail": f"Authenticated as {data.get('displayName', '?')} ({data.get('emailAddress', '?')})"}
-            return {"type": None, "detail": f"HTTP {resp.status_code}"}
+            if resp.status_code == 401:
+                return {"type": None, "detail": "Classic endpoint returned HTTP 401 - token rejected (may be scoped token or wrong credentials)"}
+            return {"type": None, "detail": f"Classic endpoint returned HTTP {resp.status_code}"}
+    except httpx.ConnectError:
+        return {"type": None, "detail": f"Could not connect to {base_url} - check the URL"}
     except httpx.RequestError as e:
-        return {"type": None, "detail": str(e)}
+        return {"type": None, "detail": f"Network error: {e}"}
 
 
 async def try_scoped_via_gateway(email: str, token: str) -> dict:
@@ -41,12 +47,16 @@ async def try_scoped_via_gateway(email: str, token: str) -> dict:
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(url, auth=auth, headers=headers, timeout=10)
+            if resp.status_code == 401:
+                return {"type": None, "detail": "Scoped gateway returned HTTP 401 - token rejected or not a scoped token"}
+            if resp.status_code == 404:
+                return {"type": None, "detail": "Scoped gateway URL not found (this endpoint may not be available for this account type)"}
             if resp.status_code != 200:
-                return {"type": None, "detail": f"accessible-resources returned HTTP {resp.status_code}"}
+                return {"type": None, "detail": f"Scoped gateway returned HTTP {resp.status_code}"}
 
             resources = resp.json()
             if not resources:
-                return {"type": None, "detail": "accessible-resources returned empty list"}
+                return {"type": None, "detail": "Scoped gateway returned empty list - no Jira sites accessible with this token"}
 
             for r in resources:
                 cloud_id = r["id"]
@@ -63,20 +73,38 @@ async def try_scoped_via_gateway(email: str, token: str) -> dict:
                         "detail": f"Authenticated as {data.get('displayName', '?')} on site '{site_name}'",
                     }
 
-            return {"type": None, "detail": "No accessible sites responded successfully"}
+            return {"type": None, "detail": "Scoped gateway found resources but none accepted authentication"}
     except httpx.RequestError as e:
-        return {"type": None, "detail": str(e)}
+        return {"type": None, "detail": f"Network error: {e}"}
 
 
 async def main() -> None:
+    # Load .env from project root (parent of scripts/)
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
+        print(f"(Loaded env from {env_path})")
+        print()
+
     parser = argparse.ArgumentParser(description="Detect Jira API token type (classic vs scoped)")
     parser.add_argument("--base-url", default=os.getenv("JIRA_BASE_URL"), help="Jira site URL (e.g. https://yourcompany.atlassian.net)")
     parser.add_argument("--email", default=os.getenv("JIRA_EMAIL"), help="Atlassian account email")
     parser.add_argument("--token", default=os.getenv("JIRA_API_TOKEN"), help="Jira API token")
     args = parser.parse_args()
 
-    if not all([args.base_url, args.email, args.token]):
-        print("Error: --base-url, --email, and --token are required (or set JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN)")
+    missing = []
+    if not args.base_url:
+        missing.append("JIRA_BASE_URL")
+    if not args.email:
+        missing.append("JIRA_EMAIL")
+    if not args.token:
+        missing.append("JIRA_API_TOKEN")
+
+    if missing:
+        print("Error: missing required variable(s):")
+        for var in missing:
+            print(f"  - {var}")
+        print("Pass them as --base-url, --email, --token flags or set as environment variables.")
         sys.exit(1)
 
     masked = f"{args.token[:6]}...{args.token[-4:]}" if len(args.token) > 10 else "(too short)"
