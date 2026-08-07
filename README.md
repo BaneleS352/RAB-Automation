@@ -177,6 +177,13 @@ pytest
 
 Tests use monkeypatched environment variables and an in-memory/test database — no `.env` file or external services required.
 
+## Documentation
+
+Full documentation lives in [`docs/`](docs/index.md): [setup](docs/setup.md),
+[architecture](docs/architecture.md), [database](docs/database.md),
+[testing](docs/testing.md), [dashboard & demo](docs/dashboard.md),
+[operations](docs/operations.md), and [roadmap](docs/roadmap.md).
+
 ## Security Notes
 
 - All SQL identifiers are validated against module-level column allowlists before use (no raw user input reaches SQL).
