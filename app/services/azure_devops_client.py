@@ -1,10 +1,13 @@
+"""Azure DevOps REST API client for PR and pipeline checks."""
+
 import logging
 import re
-from urllib.parse import urlparse
 
 import httpx
 
 from app.config import get_settings
+
+_DEFAULT_TIMEOUT = httpx.Timeout(30.0)
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +57,9 @@ class AzureDevOpsClient:
             raise AzureDevOpsClientError("Azure DevOps is not configured.")
         url = f"{self._base_url()}{path}"
         merged_params = dict(params or {})
-        merged_params.setdefault("api-version", "7.1")
+        merged_params.setdefault("api-version", self.settings.AZURE_DEVOPS_API_VERSION)
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
                 resp = await client.get(url, auth=self._auth(), headers=self._auth_headers(), params=merged_params)
                 resp.raise_for_status()
                 return resp.json()

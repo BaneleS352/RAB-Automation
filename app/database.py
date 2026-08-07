@@ -5,9 +5,21 @@ from pathlib import Path
 
 import aiosqlite
 
+from app.config import get_settings
+
 logger = logging.getLogger(__name__)
 
-DB_PATH = Path(__file__).resolve().parent.parent / "rab_automation.db"
+_DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "rab_automation.db"
+
+
+def _get_db_path() -> Path:
+    settings = get_settings()
+    if settings.DATABASE_PATH:
+        return Path(settings.DATABASE_PATH)
+    return _DEFAULT_DB_PATH
+
+
+DB_PATH = _get_db_path()
 
 _connection: aiosqlite.Connection | None = None
 

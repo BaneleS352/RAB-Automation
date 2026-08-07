@@ -19,7 +19,7 @@ class JiraIssuePayload(BaseModel):
     @classmethod
     def validate_issue_key(cls, v: str | None) -> str | None:
         if v is not None and not ISSUE_KEY_PATTERN.match(v):
-            raise ValueError(f"Invalid issue key format: {v}")
+            raise ValueError("Invalid issue key format")
         return v
 
 

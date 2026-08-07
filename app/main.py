@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_application: FastAPI):
+async def lifespan(_application: FastAPI):  # type: ignore[return]
     await init_db()
     get_task_queue().start()
     yield

@@ -1,3 +1,5 @@
+"""Field validation for Jira issue fields required by the RAB process."""
+
 import logging
 from dataclasses import dataclass, field
 

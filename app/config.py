@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "rab-automation"
     APP_ENV: str = "local"
     LOG_LEVEL: str = "INFO"
+    DATABASE_PATH: str = ""
 
     # Required: Jira webhook endpoint
     JIRA_WEBHOOK_URL: str
@@ -55,6 +56,7 @@ class Settings(BaseSettings):
     AZURE_DEVOPS_PROJECT: str = ""
     AZURE_DEVOPS_REPO_ID: str = ""
     AZURE_DEVOPS_PAT: str | None = None
+    AZURE_DEVOPS_API_VERSION: str = "7.1"
 
     # Optional: SharePoint (future phases)
     SHAREPOINT_SITE_ID: str | None = None

@@ -26,7 +26,7 @@ class MetricsResponse(BaseModel):
 
 
 @router.get("/metrics", response_model=MetricsResponse)
-async def metrics():
+async def metrics() -> MetricsResponse:
     q = get_task_queue()
     all_tasks = q.all_tasks
     completed = sum(1 for t in all_tasks if t.status.value == "completed")

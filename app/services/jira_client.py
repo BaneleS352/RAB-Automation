@@ -1,9 +1,13 @@
+"""Jira REST API client for fetching issues, comments, and transitions."""
+
 import logging
-from typing import Any, Dict
+from typing import Any
 
 import httpx
 
 from app.config import get_settings
+
+_DEFAULT_TIMEOUT = httpx.Timeout(30.0)
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +40,7 @@ class JiraClient:
             raise JiraClientError("Jira configuration is incomplete.")
         url = f"{self.base_url.rstrip('/')}{path}"
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
                 resp = await client.get(url, auth=self._auth(), headers=self._auth_headers(), params=params)
                 resp.raise_for_status()
                 return resp.json()
@@ -50,7 +54,7 @@ class JiraClient:
             raise JiraClientError("Jira configuration is incomplete.")
         url = f"{self.base_url.rstrip('/')}{path}"
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
                 resp = await client.put(url, auth=self._auth(), headers=self._auth_headers(), json=body)
                 resp.raise_for_status()
                 return resp.json() if resp.content else {}
@@ -64,7 +68,7 @@ class JiraClient:
             raise JiraClientError("Jira configuration is incomplete.")
         url = f"{self.base_url.rstrip('/')}{path}"
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
                 resp = await client.post(url, auth=self._auth(), headers=self._auth_headers(), json=body)
                 resp.raise_for_status()
                 return resp.json() if resp.content else {}
@@ -73,7 +77,7 @@ class JiraClient:
         except httpx.RequestError as e:
             raise JiraClientError(f"Network error: {e}") from e
 
-    async def get_issue(self, issue_key: str, fields: str | None = None) -> Dict[str, Any]:
+    async def get_issue(self, issue_key: str, fields: str | None = None) -> dict[str, Any]:
         params = {}
         if fields:
             params["fields"] = fields

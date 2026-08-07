@@ -12,6 +12,9 @@ router = APIRouter(prefix="/rab", tags=["rab"])
 
 _repo = RabRepository()
 
+_DEFAULT_LIMIT = 50
+_MAX_LIMIT = 200
+
 
 class RabRecord(BaseModel):
     id: int
@@ -35,15 +38,15 @@ class RabRecordList(BaseModel):
 
 @router.get("/records", response_model=RabRecordList)
 async def list_records(
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(_DEFAULT_LIMIT, ge=1, le=_MAX_LIMIT),
     offset: int = Query(0, ge=0),
-):
+) -> RabRecordList:
     rows, total = await _repo.get_all_records_with_count(limit=limit, offset=offset)
     return RabRecordList(records=[RabRecord(**r) for r in rows], total=total)
 
 
 @router.get("/records/{issue_key}", response_model=RabRecord | None)
-async def get_record(issue_key: str):
+async def get_record(issue_key: str) -> RabRecord | None:
     row = await _repo.get_record(issue_key)
     if row:
         return RabRecord(**row)

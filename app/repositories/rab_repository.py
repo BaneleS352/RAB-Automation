@@ -17,6 +17,7 @@ ALLOWED_RAB_COLUMNS = frozenset({
 })
 
 ALLOWED_EVENT_COLUMNS = frozenset({"issue_key", "step", "action", "approver", "reason"})
+_APPROVAL_STATUS_MAP = {"approve": "approved", "reject": "rejected"}
 
 
 class RabRepository:
@@ -55,6 +56,7 @@ class RabRepository:
 
     async def record_validation(self, issue_key: str, valid: bool, detail: str = "") -> None:
         await self.upsert_record(issue_key, {
+            "issue_key": issue_key,
             "status": "validated" if valid else "validation_failed",
             "validation_result": detail,
         })
@@ -71,13 +73,12 @@ class RabRepository:
         )
         await db.commit()
 
-        status_map = {"approve": "approved", "reject": "rejected"}
         col = f"{step.lower()}_approval"
         if col not in ALLOWED_RAB_COLUMNS:
             raise ValueError(f"Invalid approval column: {col}")
         await db.execute(
             f"UPDATE rab_records SET {col} = ?, rejection_reason = ?, rejected_by = ?, status = ?, updated_at = ? WHERE issue_key = ?",
-            (status_map.get(action, action), reason, approver, f"{step.lower()}_{action}d", datetime.now(timezone.utc).isoformat(), issue_key),
+            (_APPROVAL_STATUS_MAP.get(action, action), reason, approver, f"{step.lower()}_{action}d", datetime.now(timezone.utc).isoformat(), issue_key),
         )
         await db.commit()
 
@@ -93,9 +94,9 @@ class RabRepository:
         except IntegrityError:
             await db.rollback()
             return False
-        except Exception:
+        except Exception as e:
             await db.rollback()
-            logger.exception("Unexpected error recording webhook event")
+            logger.exception("Unexpected error recording webhook event: %s", e)
             raise
 
     async def get_all_records(self, limit: int = 50, offset: int = 0) -> list[dict]:

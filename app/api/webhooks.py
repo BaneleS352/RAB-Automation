@@ -23,7 +23,7 @@ rab_repo = RabRepository()
 async def jira_webhook(
     payload: JiraWebhookPayload,
     x_idempotency_key: str | None = Header(None),
-):
+) -> JiraWebhookResponse:
     issue_key: str | None = None
     if payload.issue is not None:
         issue_key = payload.issue.key

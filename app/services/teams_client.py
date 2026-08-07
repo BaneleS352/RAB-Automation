@@ -1,3 +1,5 @@
+"""Microsoft Teams / Bot Framework client for sending proactive messages."""
+
 import logging
 import time
 from dataclasses import dataclass, field
@@ -7,6 +9,8 @@ import httpx
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_TIMEOUT = httpx.Timeout(30.0)
 
 
 class TeamsClientError(Exception):
@@ -59,7 +63,7 @@ class TeamsClient:
             "scope": "https://api.botframework.com/.default",
         }
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
                 resp = await client.post(url, data=data)
                 resp.raise_for_status()
                 result = resp.json()
@@ -82,7 +86,7 @@ class TeamsClient:
             "Content-Type": "application/json",
         }
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
                 resp = await client.post(url, json=activity, headers=headers)
                 resp.raise_for_status()
                 return resp.json()

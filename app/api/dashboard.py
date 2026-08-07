@@ -1,6 +1,7 @@
 """Dashboard HTML views for health and audit records."""
 
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
@@ -15,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-templates = Jinja2Templates(directory="app/templates")
+_templates_dir = Path(__file__).resolve().parent.parent / "templates"
+templates = Jinja2Templates(directory=str(_templates_dir))
 
 _repo = RabRepository()
 _jira = JiraClient()
@@ -24,7 +26,7 @@ _teams = TeamsClient()
 
 
 @router.get("/health", response_class=HTMLResponse)
-async def dashboard_health(request: Request):
+async def dashboard_health(request: Request) -> HTMLResponse:
     jira_status = await _jira.check_connection()
     azure_status = await _azure.check_connection()
     teams_status = await _teams.check_connection()
@@ -39,6 +41,6 @@ async def dashboard_health(request: Request):
 
 
 @router.get("/records", response_class=HTMLResponse)
-async def dashboard_records(request: Request):
-    records = await _repo.get_all_records(limit=100)
+async def dashboard_records(request: Request) -> HTMLResponse:
+    records = await _repo.get_all_records(limit=50)
     return templates.TemplateResponse(request, "records.html", {"records": records})

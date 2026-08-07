@@ -21,16 +21,16 @@ class KeyVaultClient:
         self.vault_url = vault_url
         self._use_key_vault = bool(vault_url)
         if self._use_key_vault:
-            logger.info("Key Vault configured: %s", vault_url)
+            logger.debug("Key Vault configured: %s", vault_url)
         else:
-            logger.info("Key Vault not configured — using env vars")
+            logger.debug("Key Vault not configured — using env vars")
 
     def get_secret(self, secret_name: str) -> str:
         """Retrieve a secret. Falls back to environment variable."""
         if not self._use_key_vault:
             value = os.environ.get(secret_name, "")
             if not value:
-                raise KeyVaultClientError(f"Secret '{secret_name}' not found in env")
+                raise KeyVaultClientError("Secret not found in environment")
             return value
 
         try:
@@ -42,13 +42,14 @@ class KeyVaultClient:
             secret = client.get_secret(secret_name)
             return secret.value
         except ImportError:
-            logger.warning("azure-identity / azure-keyvault-secrets not installed, falling back to env")
+            logger.warning("Azure SDK packages not installed, falling back to env")
             value = os.environ.get(secret_name, "")
             if not value:
-                raise KeyVaultClientError(f"Secret '{secret_name}' not found in env or Key Vault")
+                raise KeyVaultClientError("Secret not found in env or Key Vault")
             return value
         except Exception as e:
-            raise KeyVaultClientError(f"Failed to fetch secret '{secret_name}': {e}") from e
+            logger.debug("Failed to fetch secret '%s': %s", secret_name, e)
+            raise KeyVaultClientError("Failed to fetch secret from Key Vault") from e
 
     def is_configured(self) -> bool:
         return self._use_key_vault
