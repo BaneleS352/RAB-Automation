@@ -11,6 +11,7 @@ from app.repositories.rab_repository import RabRepository
 from app.services.jira_client import JiraClient
 from app.services.azure_devops_client import AzureDevOpsClient
 from app.services.teams_client import TeamsClient
+from app.services.test_runner import run_test_suite
 
 logger = logging.getLogger(__name__)
 
@@ -44,3 +45,9 @@ async def dashboard_health(request: Request) -> HTMLResponse:
 async def dashboard_records(request: Request) -> HTMLResponse:
     records = await _repo.get_all_records(limit=50)
     return templates.TemplateResponse(request, "records.html", {"records": records})
+
+
+@router.get("/test", response_class=HTMLResponse)
+async def dashboard_test(request: Request) -> HTMLResponse:
+    result = await run_test_suite()
+    return templates.TemplateResponse(request, "test.html", {"result": result})

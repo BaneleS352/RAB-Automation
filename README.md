@@ -13,8 +13,9 @@ Receives Jira webhook events, validates RAB-required ticket fields, drives a seq
 - **Teams notifications**: adaptive cards for validation, approval requests, decisions, and release-ready (optional)
 - **SQLite audit trail**: `rab_records`, `approval_events`, `webhook_events`
 - **Production hardening**: async task queue, Azure Key Vault secret resolution, request metrics middleware, configurable HTTP timeouts, SQL-injection-safe column allowlisting
-- **HTML dashboard**: health and records views (`/dashboard/*`)
-- **118 passing tests** across 16 test files
+- **HTML dashboard**: health, test, and records views (`/dashboard/*`)
+- **Run tests from the UI**: a "Run Tests" button in the dashboard navbar executes the full pytest suite in an isolated subprocess
+- **122 passing tests** across 17 test files
 
 ## Project Structure
 
@@ -49,9 +50,10 @@ rab-automation/
       card_templates.py        # Adaptive Card templates
       key_vault_client.py      # Azure Key Vault with env fallback
       task_queue.py            # In-process async worker
+      test_runner.py           # Runs pytest in a subprocess with isolated DB
     templates/                 # Jinja2 HTML templates
     static/css/                # Dashboard styling
-  tests/                       # 16 test files, 118 tests
+  tests/                       # 17 test files, 122 tests
   .env.example
   requirements.txt
   pyproject.toml
@@ -102,6 +104,7 @@ The service starts at `http://localhost:8000`. The dashboard is at `http://local
 | `/` | Redirects to `/dashboard/health` |
 | `/dashboard/health` | Connection status for Jira, Azure DevOps, Teams |
 | `/dashboard/records` | Audit-trail table of processed issues |
+| `/dashboard/test` | Runs the full pytest suite and shows pass/fail summary |
 
 ### JSON API
 

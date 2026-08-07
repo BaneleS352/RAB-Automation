@@ -54,6 +54,20 @@ body {
     color: #fff;
 }
 
+.nav-links .nav-btn {
+    display: inline-block;
+    background: #e94560;
+    color: #fff;
+    padding: 0.4rem 0.9rem;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.nav-links .nav-btn:hover {
+    background: #ff5a72;
+    color: #fff;
+}
+
 /* Health grid */
 .health-grid {
     display: grid;
@@ -159,6 +173,38 @@ tr:nth-child(even) {
     text-align: center;
     padding: 3rem;
     color: #999;
+}
+
+.test-output {
+    margin-top: 0.75rem;
+    padding: 1rem;
+    background: #1a1a2e;
+    color: #d4d4e8;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    max-height: 480px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.actions {
+    margin-top: 1.5rem;
+}
+
+.btn {
+    display: inline-block;
+    background: #1a1a2e;
+    color: #fff;
+    padding: 0.5rem 1.2rem;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.btn:hover {
+    background: #e94560;
 }
 
 h1 {
