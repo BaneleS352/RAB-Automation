@@ -76,9 +76,11 @@ class RabRepository:
         col = f"{step.lower()}_approval"
         if col not in ALLOWED_RAB_COLUMNS:
             raise ValueError(f"Invalid approval column: {col}")
+        approval_status = _APPROVAL_STATUS_MAP.get(action, action)
+        record_status = f"{step.lower()}_{approval_status}"
         await db.execute(
             f"UPDATE rab_records SET {col} = ?, rejection_reason = ?, rejected_by = ?, status = ?, updated_at = ? WHERE issue_key = ?",
-            (_APPROVAL_STATUS_MAP.get(action, action), reason, approver, f"{step.lower()}_{action}d", datetime.now(timezone.utc).isoformat(), issue_key),
+            (approval_status, reason, approver, record_status, datetime.now(timezone.utc).isoformat(), issue_key),
         )
         await db.commit()
 

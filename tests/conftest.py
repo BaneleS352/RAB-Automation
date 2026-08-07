@@ -3,8 +3,13 @@
 import asyncio
 import logging
 import os
+import tempfile
+import uuid
 
 os.environ["APP_ENV"] = "test"
+os.environ["DATABASE_PATH"] = os.path.join(
+    tempfile.gettempdir(), f"rab_pytest_{uuid.uuid4().hex}.db"
+)
 
 from pathlib import Path
 

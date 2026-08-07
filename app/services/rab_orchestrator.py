@@ -20,12 +20,19 @@ logger = logging.getLogger(__name__)
 
 
 class RabOrchestrator:
-    def __init__(self) -> None:
-        self.jira_client = JiraClient()
-        self.field_validator = FieldValidator()
-        self.teams_client = TeamsClient()
-        self.approval_service = ApprovalService()
-        self.rab_repo = RabRepository()
+    def __init__(
+        self,
+        jira_client: JiraClient | None = None,
+        field_validator: FieldValidator | None = None,
+        teams_client: TeamsClient | None = None,
+        approval_service: ApprovalService | None = None,
+        rab_repo: RabRepository | None = None,
+    ) -> None:
+        self.jira_client = jira_client or JiraClient()
+        self.field_validator = field_validator or FieldValidator()
+        self.teams_client = teams_client or TeamsClient()
+        self.approval_service = approval_service or ApprovalService()
+        self.rab_repo = rab_repo or RabRepository()
 
     async def handle_jira_event(
         self,

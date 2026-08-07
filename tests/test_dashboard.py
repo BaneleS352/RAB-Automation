@@ -62,7 +62,12 @@ class TestDashboardRecords:
         body = client.get("/dashboard/records").text
         assert "RAB Audit Records" in body
 
-    def test_shows_empty_state(self, client: TestClient) -> None:
+    def test_shows_empty_state(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.repositories.rab_repository import RabRepository
+
+        async def mock_get_all(self, limit=50, offset=0):
+            return []
+        monkeypatch.setattr(RabRepository, "get_all_records", mock_get_all)
         body = client.get("/dashboard/records").text
         assert "No audit records found" in body
 

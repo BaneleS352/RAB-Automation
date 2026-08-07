@@ -15,7 +15,8 @@ Receives Jira webhook events, validates RAB-required ticket fields, drives a seq
 - **Production hardening**: async task queue, Azure Key Vault secret resolution, request metrics middleware, configurable HTTP timeouts, SQL-injection-safe column allowlisting
 - **HTML dashboard**: health, test, and records views (`/dashboard/*`)
 - **Run tests from the UI**: a "Run Tests" button in the dashboard navbar executes the full pytest suite in an isolated subprocess
-- **122 passing tests** across 17 test files
+- **Dummy approval flow**: `/demo/flow` runs a full simulated SDL → SDM → meeting workflow against a stub Jira client, producing real logs and audit records with no external calls
+- **129 passing tests** across 18 test files
 
 ## Project Structure
 
@@ -51,9 +52,10 @@ rab-automation/
       key_vault_client.py      # Azure Key Vault with env fallback
       task_queue.py            # In-process async worker
       test_runner.py           # Runs pytest in a subprocess with isolated DB
+      dummy_flow.py            # Simulated RAB flow with stub Jira client
     templates/                 # Jinja2 HTML templates
     static/css/                # Dashboard styling
-  tests/                       # 17 test files, 122 tests
+  tests/                       # 18 test files, 129 tests
   .env.example
   requirements.txt
   pyproject.toml
@@ -121,6 +123,7 @@ The service starts at `http://localhost:8000`. The dashboard is at `http://local
 |---|---|
 | `POST /webhooks/jira` | Receive Jira events; pass `X-Idempotency-Key` to deduplicate |
 | `POST /webhooks/teams` | Receive Bot Framework activities (approve/reject/meeting card clicks) |
+| `GET /demo/flow` | Run simulated RAB flow (`?issue_key=&reject=&needs_meeting=`) — produces logs + audit records |
 
 #### Jira webhook example
 

@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.dashboard import router as dashboard_router
+from app.api.demo import router as demo_router
 from app.api.health import router as health_router
 from app.api.rab import router as rab_router
 from app.api.teams import router as teams_router
@@ -14,4 +15,5 @@ api_router.include_router(health_router)
 api_router.include_router(webhooks_router)
 api_router.include_router(teams_router)
 api_router.include_router(rab_router)
+api_router.include_router(demo_router)
 api_router.include_router(dashboard_router)
