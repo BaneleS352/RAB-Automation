@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ issue_key }} — RAB Automation{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ issue_key }}</h1>
+    <a class="btn btn-outline" href="/dashboard/records">« Back to records</a>
+</div>
+
+{% if record %}
+<div class="health-card">
+    <div class="detail-grid">
+        <div class="detail-item">
+            <span class="detail-label">Status</span>
+            <span class="badge badge-{{ record.status | replace('_', '-') }}">{{ record.status }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Summary</span>
+            <span>{{ record.summary or '—' }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">SDL Approval</span>
+            <span class="badge badge-{{ record.sdl_approval }}">{{ record.sdl_approval }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">SDM Approval</span>
+            <span class="badge badge-{{ record.sdm_approval }}">{{ record.sdm_approval }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Meeting Needed</span>
+            <span>{{ 'Yes' if record.meeting_needed else 'No' }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Rejected By</span>
+            <span>{{ record.rejected_by or '—' }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Rejection Reason</span>
+            <span>{{ record.rejection_reason or '—' }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Azure PR Status</span>
+            <span>{{ record.azure_pr_status or '—' }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Azure Pipeline Status</span>
+            <span>{{ record.azure_pipeline_status or '—' }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Created</span>
+            <span>{{ record.created_at[:19] | replace('T', ' ') }}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">Updated</span>
+            <span>{{ record.updated_at[:19] | replace('T', ' ') }}</span>
+        </div>
+        <div class="detail-item detail-item-full">
+            <span class="detail-label">Validation Result</span>
+            <span>{{ record.validation_result or '—' }}</span>
+        </div>
+    </div>
+</div>
+
+<h2 class="section-title">Approval Timeline</h2>
+{% if events %}
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Step</th>
+                <th>Action</th>
+                <th>Approver</th>
+                <th>Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in events %}
+            <tr>
+                <td><small>{{ e.created_at[:19] | replace('T', ' ') }}</small></td>
+                <td>{{ e.step }}</td>
+                <td><span class="badge badge-{{ e.action }}">{{ e.action }}</span></td>
+                <td>{{ e.approver or '—' }}</td>
+                <td><small>{{ e.reason or '—' }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">No approval events recorded for this issue.</p>
+{% endif %}
+
+<p class="muted"><a href="/rab/records/{{ record.issue_key }}">View JSON API record</a></p>
+{% else %}
+<p class="empty-state">No record found for <strong>{{ issue_key }}</strong>.</p>
+<a class="btn btn-outline" href="/dashboard/records">« Back to records</a>
+{% endif %}
+{% endblock %}

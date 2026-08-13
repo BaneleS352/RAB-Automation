@@ -60,8 +60,22 @@ class FieldValidator:
             return None
         if mapped in ("assignee", "reporter"):
             user = fields.get(mapped)
-            return user.get("displayName") if user else None
-        return fields.get(mapped)
+            return user.get("displayName") if isinstance(user, dict) else None
+        return self._normalize(fields.get(mapped))
+
+    @staticmethod
+    def _normalize(value: object) -> str | None:
+        """Flatten common Jira custom field shapes into a single string."""
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            return value.get("displayName") or value.get("value") or value.get("name")
+        if isinstance(value, list):
+            if not value:
+                return None
+            item = value[0]
+            return item.get("value") if isinstance(item, dict) else str(item)
+        return value if isinstance(value, str) else str(value)
 
     def validate(self, issue_data: dict) -> ValidationResult:
         missing: list[str] = []

@@ -26,7 +26,7 @@ workflow with an SQLite audit trail, Teams notifications, and an HTML dashboard.
   Azure DevOps, Microsoft Teams (incoming webhook or Bot Framework; optional)
 - **Observability**: `/health`, `/metrics`, HTML dashboard,
   structured `INFO` logging
-- **Tests**: `pytest` with `pytest-asyncio`, **146 tests** across 18 files
+- **Tests**: `pytest` with `pytest-asyncio`, **163 tests** across 18 files
 
 ## Feature checklist
 
@@ -46,7 +46,7 @@ workflow with an SQLite audit trail, Teams notifications, and an HTML dashboard.
 - [x] `/metrics` endpoint + request middleware
 - [x] HTTP client timeouts (30s) everywhere
 - [x] SQL-injection-safe column allowlisting
-- [x] HTML dashboard (health, records, test results)
+- [x] HTML dashboard (overview KPIs, records search/filter/pagination, per-issue timeline, webhook ledger, metrics, demo)
 - [x] "Run Tests" button in the dashboard
 - [x] Dummy approval flow (`GET /demo/flow`)
 

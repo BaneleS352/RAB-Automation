@@ -21,13 +21,6 @@ class HealthResponse(BaseModel):
     teams: JiraConnectionInfo | None = None
 
 
-class RootResponse(BaseModel):
-    """Response model for the root endpoint."""
-
-    service: str
-    status: str
-
-
 class JiraWebhookResponse(BaseModel):
     """Response model for a successfully processed Jira webhook."""
 

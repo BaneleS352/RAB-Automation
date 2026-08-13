@@ -72,7 +72,6 @@ class DummyFlowService:
         validation = await self.orchestrator.handle_jira_event(
             issue_key=self.issue_key,
             event_type="jira:issue_created",
-            payload={},
         )
         self._log("validation", validation)
 
@@ -99,7 +98,6 @@ class DummyFlowService:
         validation = await self.orchestrator.handle_jira_event(
             issue_key=self.issue_key,
             event_type="jira:issue_created",
-            payload={},
         )
         self._log("validation", validation)
 

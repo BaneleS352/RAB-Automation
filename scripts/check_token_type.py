@@ -108,7 +108,7 @@ async def main() -> None:
         sys.exit(1)
 
     masked = f"{args.token[:6]}...{args.token[-4:]}" if len(args.token) > 10 else "(too short)"
-    print(f"Checking Jira API token...")
+    print("Checking Jira API token...")
     print(f"  Site:  {args.base_url}")
     print(f"  Email: {args.email}")
     print(f"  Token: {masked}")
@@ -120,7 +120,7 @@ async def main() -> None:
     if result["type"] == "classic":
         print(f"   [OK] {result['detail']}")
         print()
-        print(f"   Token type: CLASSIC (unscoped)")
+        print("   Token type: CLASSIC (unscoped)")
         print(f"   URL format: {args.base_url.rstrip('/')}/rest/api/3/...")
         print()
         print("   This works with the current JiraClient as-is.")
@@ -135,10 +135,10 @@ async def main() -> None:
     if result["type"] == "scoped":
         print(f"   [OK] {result['detail']}")
         print()
-        print(f"   Token type: SCOPED")
+        print("   Token type: SCOPED")
         print(f"   Cloud ID:   {result['cloud_id']}")
         print(f"   Site name:  {result['site_name']}")
-        print(f"   URL format: https://api.atlassian.com/ex/jira/{{cloudId}}/rest/api/3/...")
+        print("   URL format: https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/...")
         print()
         print("   [WARN] This token will NOT work with the current JiraClient.")
         print("   The JiraClient needs to be updated to detect scoped tokens")

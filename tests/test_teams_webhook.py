@@ -16,7 +16,7 @@ def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def _mock_orchestrator(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.services.rab_orchestrator import RabOrchestrator
 
-    async def mock_callback(self, issue_key, action, approver="", reason=None):
+    async def mock_callback(self, issue_key, action, approver="", reason=None, approval_id=""):
         return {"status": "approved", "detail": "done"}
 
     async def mock_meeting(self, issue_key, needs_meeting):

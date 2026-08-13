@@ -41,6 +41,9 @@ class AzureDevOpsClient:
     def _is_configured(self) -> bool:
         return bool(self.org and self.project and self.pat)
 
+    def is_configured(self) -> bool:
+        return self._is_configured()
+
     def _auth_headers(self) -> dict:
         return {
             "Accept": "application/json",
@@ -49,13 +52,12 @@ class AzureDevOpsClient:
     def _auth(self) -> httpx.BasicAuth:
         return httpx.BasicAuth("", self.pat)
 
-    def _base_url(self) -> str:
-        return f"https://dev.azure.com/{self.org}/{self.project}/_apis"
-
-    async def _get(self, path: str, params: dict | None = None) -> dict:
+    async def _get(self, path: str, params: dict | None = None, org: str | None = None, project: str | None = None) -> dict:
         if not self._is_configured():
             raise AzureDevOpsClientError("Azure DevOps is not configured.")
-        url = f"{self._base_url()}{path}"
+        org = org or self.org
+        project = project or self.project
+        url = f"https://dev.azure.com/{org}/{project}/_apis{path}"
         merged_params = dict(params or {})
         merged_params.setdefault("api-version", self.settings.AZURE_DEVOPS_API_VERSION)
         try:
@@ -91,11 +93,11 @@ class AzureDevOpsClient:
         parsed = parse_pr_url(pr_url)
         if not parsed:
             raise AzureDevOpsClientError(f"Could not parse PR URL: {pr_url}")
-        self.org = parsed["org"]
-        self.project = parsed["project"]
         return await self._get(
             f"/git/repositories/{parsed['repo']}/pullrequests/{parsed['pr_id']}",
             params={"searchCriteria.status": "all"},
+            org=parsed["org"],
+            project=parsed["project"],
         )
 
     async def get_pipeline_run(self, pipeline_id: int, run_id: int) -> dict:

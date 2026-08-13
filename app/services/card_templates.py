@@ -157,6 +157,34 @@ def meeting_decision_card(issue_key: str) -> dict:
     }
 
 
+def meeting_needed_card(issue_key: str) -> dict:
+    return {
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": [
+            {
+                "type": "TextBlock",
+                "text": f"Meeting required for {issue_key}. Resolve attendees from ticket fields.",
+                "wrap": True,
+            },
+        ],
+    }
+
+
+def release_ready_card(issue_key: str) -> dict:
+    return {
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": [
+            {
+                "type": "TextBlock",
+                "text": f"Release ticket {issue_key} is ready for deployment.",
+                "wrap": True,
+            },
+        ],
+    }
+
+
 def developer_notification_card(issue_key: str, missing_fields: list[str]) -> dict:
     return {
         "type": "AdaptiveCard",

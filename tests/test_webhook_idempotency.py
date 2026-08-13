@@ -10,6 +10,27 @@ def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
 
 
+@pytest.fixture(autouse=True)
+def _mock_jira(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.jira_client import JiraClient
+
+    async def mock_get_issue(self, issue_key, fields=None):
+        return {
+            "key": issue_key,
+            "fields": {
+                "summary": "Test issue",
+                "assignee": {"displayName": "Assignee"},
+                "reporter": {"displayName": "Reporter"},
+            },
+        }
+
+    async def mock_add_comment(self, issue_key, body):
+        return {}
+
+    monkeypatch.setattr(JiraClient, "get_issue", mock_get_issue)
+    monkeypatch.setattr(JiraClient, "add_comment", mock_add_comment)
+
+
 @pytest.fixture()
 def client() -> TestClient:
     from app.main import create_app
@@ -79,3 +100,30 @@ class TestWebhookIdempotency:
         data = response.json()
         assert data["idempotent_replay"] is True
         assert data["result"] is not None
+
+
+class TestWebhookLedger:
+    @pytest.mark.asyncio
+    async def test_unkeyed_webhook_is_still_logged(self, client: TestClient) -> None:
+        from app.repositories.rab_repository import RabRepository
+
+        client.post(
+            "/webhooks/jira",
+            json={"webhookEvent": "jira:issue_created", "issue": {"key": "LOG-1"}},
+        )
+        events = await RabRepository().get_webhook_events(limit=50)
+        assert any(e["issue_key"] == "LOG-1" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_webhook_status_updated_after_processing(self, client: TestClient) -> None:
+        from app.repositories.rab_repository import RabRepository
+
+        client.post(
+            "/webhooks/jira",
+            json={"webhookEvent": "jira:issue_created", "issue": {"key": "LOG-2"}},
+            headers={"X-Idempotency-Key": "ledger-1"},
+        )
+        events = await RabRepository().get_webhook_events(limit=50)
+        match = [e for e in events if e["event_id"] == "ledger-1"]
+        assert match
+        assert match[0]["status"] == "approval_requested_sdl"

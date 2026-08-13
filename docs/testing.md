@@ -2,7 +2,7 @@
 
 ## Overview
 
-The project uses `pytest` with `pytest-asyncio` (auto mode). **146 tests**
+The project uses `pytest` with `pytest-asyncio` (auto mode). **163 tests**
 across **18 files** currently pass. Tests are fully self-contained: no `.env`,
 no live Jira/Azure/Teams, and no touching the real database.
 
@@ -45,7 +45,7 @@ The `--no-header -p no:cacheprovider` flags keep output compact and avoid
 |------|----------|
 | `test_approval_service.py` | SDL→SDM state machine, approve/reject, IDs |
 | `test_azure_devops_client.py` | Config checks, PR URL parsing, API errors |
-| `test_dashboard.py` | Health/records/test pages, nav, root redirect |
+| `test_dashboard.py` | Health/records/detail/webhooks/metrics/demo pages, nav, root redirect |
 | `test_database.py` | Schema creation, idempotency, connection lifecycle |
 | `test_demo_flow.py` | Dummy flow audit writes + `/demo/flow` endpoint |
 | `test_field_validator.py` | Required-field validation logic |
@@ -54,7 +54,7 @@ The `--no-header -p no:cacheprovider` flags keep output compact and avoid
 | `test_jira_webhook.py` | Webhook processing + response model |
 | `test_key_vault_client.py` | Env fallback, error handling |
 | `test_metrics.py` | `/metrics` fields and counters |
-| `test_rab_api.py` | `/rab/records` list + detail |
+| `test_rab_api.py` | `/rab/records` list/detail/filters, events, webhook events, summary |
 | `test_rab_repository.py` | All persistence methods, pagination, dedup |
 | `test_task_queue.py` | Enqueue, completion, failure, stop/start |
 | `test_teams_client.py` | Cards, MessageCard conversion, webhook delivery, conversation store, config checks |

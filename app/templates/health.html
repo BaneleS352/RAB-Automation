@@ -1,7 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Health — RAB Automation{% endblock %}
+{% block title %}Overview — RAB Automation{% endblock %}
+{% block head_extra %}<meta http-equiv="refresh" content="30">{% endblock %}
 {% block content %}
-<h1>Service Health</h1>
+<div class="page-header">
+    <h1>Overview</h1>
+    <a class="btn btn-outline" href="/dashboard/health">Refresh</a>
+</div>
+
+<h2 class="section-title">Service Health</h2>
 <div class="health-grid">
     {% for name, info in services.items() %}
     <div class="health-card {{ 'status-ok' if info.connected else 'status-fail' }}">
@@ -11,4 +17,73 @@
     </div>
     {% endfor %}
 </div>
+
+<h2 class="section-title">Pipeline Summary</h2>
+<div class="kpi-grid">
+    <div class="kpi-card"><span class="kpi-value">{{ kpis.total }}</span><span class="kpi-label">Total Tickets</span></div>
+    <div class="kpi-card"><span class="kpi-value">{{ kpis.validated }}</span><span class="kpi-label">Validated</span></div>
+    <div class="kpi-card kpi-warn"><span class="kpi-value">{{ kpis.pending_approval }}</span><span class="kpi-label">Pending Approval</span></div>
+    <div class="kpi-card kpi-ok"><span class="kpi-value">{{ kpis.release_ready }}</span><span class="kpi-label">Release Ready</span></div>
+    <div class="kpi-card kpi-ok"><span class="kpi-value">{{ kpis.meeting_scheduled }}</span><span class="kpi-label">Meeting Scheduled</span></div>
+    <div class="kpi-card kpi-fail"><span class="kpi-value">{{ kpis.validation_failed }}</span><span class="kpi-label">Validation Failed</span></div>
+    <div class="kpi-card kpi-fail"><span class="kpi-value">{{ kpis.rejected }}</span><span class="kpi-label">Rejected</span></div>
+</div>
+
+<h2 class="section-title">Waiting for Approval (over {{ aging_days }} days)</h2>
+{% if aging %}
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Issue Key</th>
+                <th>Status</th>
+                <th>SDL</th>
+                <th>SDM</th>
+                <th>Updated</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in aging %}
+            <tr>
+                <td><a href="/dashboard/records/{{ r.issue_key }}">{{ r.issue_key }}</a></td>
+                <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
+                <td>{{ r.sdl_approval }}</td>
+                <td>{{ r.sdm_approval }}</td>
+                <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">No tickets waiting on approval for more than {{ aging_days }} days.</p>
+{% endif %}
+
+<h2 class="section-title">Recent Failures</h2>
+{% if failures %}
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Issue Key</th>
+                <th>Status</th>
+                <th>Detail</th>
+                <th>Updated</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in failures %}
+            <tr>
+                <td><a href="/dashboard/records/{{ r.issue_key }}">{{ r.issue_key }}</a></td>
+                <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
+                <td><small>{{ r.validation_result[:80] }}{% if r.validation_result|length > 80 %}…{% endif %}</small></td>
+                <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="empty-state">No recent failures.</p>
+{% endif %}
 {% endblock %}

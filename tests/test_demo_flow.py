@@ -1,6 +1,5 @@
 """Tests for the dummy RAB approval flow and demo endpoint."""
 
-import asyncio
 import pytest
 
 from app.services.dummy_flow import DummyFlowService

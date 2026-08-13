@@ -13,10 +13,10 @@ Receives Jira webhook events, validates RAB-required ticket fields, drives a seq
 - **Teams notifications**: adaptive cards for validation, approval requests, decisions, and release-ready — via Azure Bot **or** a simple incoming webhook (no app registration, no premium licensing)
 - **SQLite audit trail**: `rab_records`, `approval_events`, `webhook_events`
 - **Production hardening**: async task queue, Azure Key Vault secret resolution, request metrics middleware, configurable HTTP timeouts, SQL-injection-safe column allowlisting
-- **HTML dashboard**: health, test, and records views (`/dashboard/*`)
+- **HTML dashboard**: overview KPIs, audit-trail search/filter/pagination, per-issue timeline, webhook ledger, metrics, and demo views (`/dashboard/*`)
 - **Run tests from the UI**: a "Run Tests" button in the dashboard navbar executes the full pytest suite in an isolated subprocess
 - **Dummy approval flow**: `/demo/flow` runs a full simulated SDL → SDM → meeting workflow against a stub Jira client, producing real logs and audit records with no external calls
-- **146 passing tests** across 18 test files
+- **163 passing tests** across 18 test files
 
 ## Project Structure
 
@@ -55,7 +55,7 @@ rab-automation/
       dummy_flow.py            # Simulated RAB flow with stub Jira client
     templates/                 # Jinja2 HTML templates
     static/css/                # Dashboard styling
-  tests/                       # 18 test files, 146 tests
+  tests/                       # 18 test files, 163 tests
   .env.example
   requirements.txt
   pyproject.toml
@@ -104,8 +104,12 @@ The service starts at `http://localhost:8000`. The dashboard is at `http://local
 | Endpoint | Description |
 |---|---|
 | `/` | Redirects to `/dashboard/health` |
-| `/dashboard/health` | Connection status for Jira, Azure DevOps, Teams |
-| `/dashboard/records` | Audit-trail table of processed issues |
+| `/dashboard/health` | **Overview** — connection status + pipeline KPIs, aging approvals, recent failures (auto-refreshes every 30s) |
+| `/dashboard/records` | Audit-trail table with issue-key search, status filter, and pagination |
+| `/dashboard/records/{issue_key}` | Per-issue detail page with the full approval-event timeline |
+| `/dashboard/webhooks` | Webhook ingestion ledger (`webhook_events`) |
+| `/dashboard/metrics` | Human-readable operational metrics (uptime, requests, queue load) |
+| `/dashboard/demo` | Form-driven dummy approval flow |
 | `/dashboard/test` | Runs the full pytest suite and shows pass/fail summary |
 
 ### JSON API
@@ -114,8 +118,11 @@ The service starts at `http://localhost:8000`. The dashboard is at `http://local
 |---|---|
 | `GET /health` | Health status + per-integration connection details |
 | `GET /metrics` | Prometheus-style metrics (uptime, requests, failures, queue state) |
-| `GET /rab/records` | List audit records (`?limit=&offset=`) |
+| `GET /rab/records` | List audit records (`?limit=&offset=&status=&q=`) |
 | `GET /rab/records/{issue_key}` | Audit record for a single issue |
+| `GET /rab/records/{issue_key}/events` | Approval-event timeline for a single issue |
+| `GET /rab/webhook-events` | Webhook ingestion history (`webhook_events`) |
+| `GET /rab/summary` | Pipeline counts + aging approvals (`?aging_days=`) |
 
 ### Webhooks
 

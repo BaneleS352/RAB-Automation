@@ -51,7 +51,7 @@ class TestAzureDevOpsClient:
 
     @pytest.mark.asyncio
     async def test_check_connection_success(self, monkeypatch):
-        async def mock_get(self, path, params=None):
+        async def mock_get(self, path, params=None, org=None, project=None):
             return {"value": [{"id": "repo-1"}]}
         monkeypatch.setattr(AzureDevOpsClient, "_get", mock_get)
         client = AzureDevOpsClient()
@@ -60,7 +60,7 @@ class TestAzureDevOpsClient:
 
     @pytest.mark.asyncio
     async def test_get_pull_request(self, monkeypatch):
-        async def mock_get(self, path, params=None):
+        async def mock_get(self, path, params=None, org=None, project=None):
             return {"pullRequestId": 42, "title": "Test PR", "status": "active"}
         monkeypatch.setattr(AzureDevOpsClient, "_get", mock_get)
         client = AzureDevOpsClient()
@@ -70,16 +70,22 @@ class TestAzureDevOpsClient:
 
     @pytest.mark.asyncio
     async def test_get_pull_request_by_url(self, monkeypatch):
-        async def mock_get(self, path, params=None):
+        calls = []
+
+        async def mock_get(self, path, params=None, org=None, project=None):
+            calls.append((org, project, path))
             return {"pullRequestId": 42, "title": "URL PR", "status": "completed"}
+
         monkeypatch.setattr(AzureDevOpsClient, "_get", mock_get)
         client = AzureDevOpsClient()
         pr = await client.get_pull_request_by_url("https://dev.azure.com/org/proj/_git/repo/pullrequest/42")
         assert pr["pullRequestId"] == 42
+        assert calls == [("org", "proj", "/git/repositories/repo/pullrequests/42")]
+        assert (client.org, client.project) == ("testorg", "testproject")
 
     @pytest.mark.asyncio
     async def test_get_pipeline_run(self, monkeypatch):
-        async def mock_get(self, path, params=None):
+        async def mock_get(self, path, params=None, org=None, project=None):
             return {"id": 100, "status": "completed", "result": "succeeded"}
         monkeypatch.setattr(AzureDevOpsClient, "_get", mock_get)
         client = AzureDevOpsClient()
@@ -90,7 +96,7 @@ class TestAzureDevOpsClient:
     async def test_get_pipeline_run_by_url(self, monkeypatch):
         calls = []
 
-        async def mock_get(self, path, params=None):
+        async def mock_get(self, path, params=None, org=None, project=None):
             calls.append((path, params))
             return {"id": 55, "status": "inProgress", "result": None}
 

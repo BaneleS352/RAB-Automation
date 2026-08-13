@@ -9,12 +9,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 
+from app.api.auth import AccessTokenMiddleware
 from app.api.metrics import MetricsMiddleware, router as metrics_router
 from app.api.routes import api_router
 from app.config import get_settings
 from app.database import close_db, init_db
 from app.logging_config import setup_logging
-from app.services.task_queue import get_task_queue
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_application: FastAPI):  # type: ignore[return]
     await init_db()
-    get_task_queue().start()
     yield
-    await get_task_queue().stop()
     await close_db()
 
 
@@ -48,6 +46,7 @@ def create_app() -> FastAPI:
     application.include_router(api_router)
     application.include_router(metrics_router)
     application.add_middleware(MetricsMiddleware)
+    application.add_middleware(AccessTokenMiddleware)
 
     @application.get("/")
     async def root_redirect():

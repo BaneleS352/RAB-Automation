@@ -11,11 +11,9 @@ os.environ["DATABASE_PATH"] = os.path.join(
     tempfile.gettempdir(), f"rab_pytest_{uuid.uuid4().hex}.db"
 )
 
-from pathlib import Path
 
-import pytest
 
-from app.database import _connection, DB_PATH, close_db, init_db
+from app.database import DB_PATH, close_db, init_db
 
 logger = logging.getLogger(__name__)
 

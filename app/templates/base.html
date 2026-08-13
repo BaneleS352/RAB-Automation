@@ -5,14 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}RAB Automation{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    {% block head_extra %}{% endblock %}
 </head>
 <body>
     <nav class="navbar">
         <div class="container">
             <a href="/" class="brand">RAB Automation</a>
             <ul class="nav-links">
-                <li><a href="/dashboard/health">Health</a></li>
+                <li><a href="/dashboard/health">Overview</a></li>
                 <li><a href="/dashboard/records">Audit Records</a></li>
+                <li><a href="/dashboard/webhooks">Webhooks</a></li>
+                <li><a href="/dashboard/metrics">Metrics</a></li>
+                <li><a href="/dashboard/demo">Demo</a></li>
                 <li><a class="nav-btn" href="/dashboard/test">Run Tests</a></li>
             </ul>
         </div>

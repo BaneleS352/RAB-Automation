@@ -12,9 +12,13 @@ def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _mock_connections(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api.dashboard import _health_cache
     from app.services.jira_client import JiraClient
     from app.services.azure_devops_client import AzureDevOpsClient
     from app.services.teams_client import TeamsClient
+
+    _health_cache["services"] = None
+    _health_cache["at"] = 0.0
 
     async def mock_check(self):
         return {"connected": True, "details": "Mock connection OK"}
@@ -65,11 +69,189 @@ class TestDashboardRecords:
     def test_shows_empty_state(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         from app.repositories.rab_repository import RabRepository
 
-        async def mock_get_all(self, limit=50, offset=0):
-            return []
-        monkeypatch.setattr(RabRepository, "get_all_records", mock_get_all)
+        async def mock_get_all(self, limit=25, offset=0, status="", q=""):
+            return [], 0
+        monkeypatch.setattr(RabRepository, "get_all_records_with_count", mock_get_all)
         body = client.get("/dashboard/records").text
         assert "No audit records found" in body
+
+
+class TestDashboardHealthCache:
+    def test_connection_checks_are_cached_within_ttl(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.api import dashboard as dashboard_mod
+        from app.services.jira_client import JiraClient
+        from app.services.azure_devops_client import AzureDevOpsClient
+        from app.services.teams_client import TeamsClient
+
+        dashboard_mod._health_cache["services"] = None
+        dashboard_mod._health_cache["at"] = 0.0
+        calls = {"jira": 0, "azure": 0, "teams": 0}
+
+        async def jira_check(self):
+            calls["jira"] += 1
+            return {"connected": True, "details": "ok"}
+
+        async def azure_check(self):
+            calls["azure"] += 1
+            return {"connected": True, "details": "ok"}
+
+        async def teams_check(self):
+            calls["teams"] += 1
+            return {"connected": True, "details": "ok"}
+
+        monkeypatch.setattr(JiraClient, "check_connection", jira_check)
+        monkeypatch.setattr(AzureDevOpsClient, "check_connection", azure_check)
+        monkeypatch.setattr(TeamsClient, "check_connection", teams_check)
+
+        client.get("/dashboard/health")
+        client.get("/dashboard/health")
+        assert calls["jira"] == 1
+        assert calls["azure"] == 1
+        assert calls["teams"] == 1
+
+
+class TestDashboardOverview:
+    def test_shows_pipeline_summary(self, client: TestClient) -> None:
+        body = client.get("/dashboard/health").text
+        assert "Pipeline Summary" in body
+        assert "Total Tickets" in body
+
+    def test_shows_aging_and_failures_sections(self, client: TestClient) -> None:
+        body = client.get("/dashboard/health").text
+        assert "Waiting for Approval" in body
+        assert "Recent Failures" in body
+
+    def test_auto_refreshes(self, client: TestClient) -> None:
+        body = client.get("/dashboard/health").text
+        assert 'http-equiv="refresh"' in body
+        assert "Refresh" in body
+
+
+class TestDashboardRecordsFiltering:
+    def test_shows_filter_form(self, client: TestClient) -> None:
+        body = client.get("/dashboard/records").text
+        assert "Search issue key" in body
+        assert "All statuses" in body
+
+    def test_filters_by_status(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.repositories.rab_repository import RabRepository
+
+        row = {
+            "issue_key": "FILT-1", "summary": "Filter test", "status": "release_ready",
+            "validation_result": "", "sdl_approval": "approved", "sdm_approval": "approved",
+            "meeting_needed": 0, "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00",
+        }
+
+        async def mock_get(self, limit=25, offset=0, status="", q=""):
+            if status == "release_ready":
+                return [row], 1
+            return [], 0
+
+        monkeypatch.setattr(RabRepository, "get_all_records_with_count", mock_get)
+        body = client.get("/dashboard/records?status=release_ready").text
+        assert "FILT-1" in body
+        assert "1 of 1 records shown" in body
+
+    def test_pagination_next_link_when_more_pages(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.repositories.rab_repository import RabRepository
+
+        row = {
+            "issue_key": "PAG-1", "summary": "", "status": "pending",
+            "validation_result": "", "sdl_approval": "pending", "sdm_approval": "pending",
+            "meeting_needed": 0, "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00",
+        }
+
+        async def mock_get(self, limit=25, offset=0, status="", q=""):
+            return [row] * 25, 100
+
+        monkeypatch.setattr(RabRepository, "get_all_records_with_count", mock_get)
+        body = client.get("/dashboard/records").text
+        assert "Next »" in body
+        assert "Page 1" in body
+
+
+class TestDashboardRecordDetail:
+    @pytest.fixture(autouse=True)
+    def _mock_repo(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.repositories.rab_repository import RabRepository
+
+        async def mock_get_record(self, issue_key):
+            return {
+                "id": 1, "issue_key": issue_key, "summary": "Release v2", "status": "meeting_scheduled",
+                "validation_result": "All required fields are present.", "sdl_approval": "approved",
+                "sdm_approval": "approved", "rejection_reason": "", "rejected_by": "", "meeting_needed": 1,
+                "azure_pr_status": "", "azure_pipeline_status": "",
+                "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00",
+            }
+
+        async def mock_get_events(self, issue_key):
+            return [{
+                "id": 1, "issue_key": issue_key, "step": "SDL", "action": "approve",
+                "approver": "Jane", "reason": "Looks good", "created_at": "2026-01-01T00:00:00",
+            }]
+
+        monkeypatch.setattr(RabRepository, "get_record", mock_get_record)
+        monkeypatch.setattr(RabRepository, "get_approval_events", mock_get_events)
+
+    def test_shows_record_fields_and_timeline(self, client: TestClient) -> None:
+        body = client.get("/dashboard/records/DET-1").text
+        assert "Release v2" in body
+        assert "All required fields are present." in body
+        assert "Approval Timeline" in body
+        assert "Jane" in body
+        assert "Looks good" in body
+
+    def test_missing_record(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.repositories.rab_repository import RabRepository
+
+        async def none(self, issue_key):
+            return None
+
+        monkeypatch.setattr(RabRepository, "get_record", none)
+        body = client.get("/dashboard/records/NOPE").text
+        assert "No record found" in body
+
+
+class TestDashboardWebhooks:
+    @pytest.fixture(autouse=True)
+    def _mock_repo(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.repositories.rab_repository import RabRepository
+
+        async def mock_get(self, limit=100, offset=0):
+            return [{
+                "id": 1, "event_id": "evt-1", "issue_key": "WH-1",
+                "event_type": "jira:issue_created", "status": "received",
+                "created_at": "2026-01-01T00:00:00",
+            }]
+
+        monkeypatch.setattr(RabRepository, "get_webhook_events", mock_get)
+
+    def test_shows_events(self, client: TestClient) -> None:
+        body = client.get("/dashboard/webhooks").text
+        assert "Webhook Activity" in body
+        assert "evt-1" in body
+        assert "WH-1" in body
+
+
+class TestDashboardMetrics:
+    def test_shows_counters(self, client: TestClient) -> None:
+        body = client.get("/dashboard/metrics").text
+        assert "Operational Metrics" in body
+        assert "Requests" in body
+        assert "Uptime" in body
+
+
+class TestDashboardDemo:
+    def test_shows_form(self, client: TestClient) -> None:
+        body = client.get("/dashboard/demo").text
+        assert "Demo Approval Flow" in body
+        assert "Run Flow" in body
+
+    def test_run_shows_steps(self, client: TestClient) -> None:
+        body = client.get("/dashboard/demo?run=true&issue_key=DEMO-UI-1").text
+        assert "Result: ok" in body
+        assert "sdl_approval" in body
+        assert "meeting_decision" in body
 
 
 class TestRootRedirect:

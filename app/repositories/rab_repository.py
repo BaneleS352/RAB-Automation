@@ -1,7 +1,7 @@
 """Repository for RAB audit records and approval events."""
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from aiosqlite import IntegrityError
 
@@ -12,12 +12,15 @@ logger = logging.getLogger(__name__)
 ALLOWED_RAB_COLUMNS = frozenset({
     "issue_key", "summary", "status", "validation_result",
     "sdl_approval", "sdm_approval",
+    "sdl_approval_id", "sdm_approval_id",
     "rejection_reason", "rejected_by", "meeting_needed",
     "azure_pr_status", "azure_pipeline_status",
 })
 
 ALLOWED_EVENT_COLUMNS = frozenset({"issue_key", "step", "action", "approver", "reason"})
 _APPROVAL_STATUS_MAP = {"approve": "approved", "reject": "rejected"}
+_PENDING_WHERE = "sdl_approval = 'requested' OR sdm_approval = 'requested'"
+_FAILURE_STATUSES = ("validation_failed", "sdl_rejected", "sdm_rejected")
 
 
 class RabRepository:
@@ -43,14 +46,16 @@ class RabRepository:
             )
             row_id = existing[0][0]
         else:
-            keys = ", ".join(data.keys())
-            placeholders = ", ".join("?" for _ in data)
-            values = list(data.values())
-            await db.execute(
+            payload = dict(data)
+            payload["issue_key"] = issue_key
+            keys = ", ".join(payload.keys())
+            placeholders = ", ".join("?" for _ in payload)
+            values = list(payload.values())
+            cursor = await db.execute(
                 f"INSERT INTO rab_records ({keys}, created_at, updated_at) VALUES ({placeholders}, ?, ?)",
                 values + [now, now],
             )
-            row_id = db.total_changes
+            row_id = cursor.lastrowid
         await db.commit()
         return row_id
 
@@ -78,9 +83,17 @@ class RabRepository:
             raise ValueError(f"Invalid approval column: {col}")
         approval_status = _APPROVAL_STATUS_MAP.get(action, action)
         record_status = f"{step.lower()}_{approval_status}"
+        is_reject = action == "reject"
         await db.execute(
             f"UPDATE rab_records SET {col} = ?, rejection_reason = ?, rejected_by = ?, status = ?, updated_at = ? WHERE issue_key = ?",
-            (approval_status, reason, approver, record_status, datetime.now(timezone.utc).isoformat(), issue_key),
+            (
+                approval_status,
+                reason if is_reject else "",
+                approver if is_reject else "",
+                record_status,
+                datetime.now(timezone.utc).isoformat(),
+                issue_key,
+            ),
         )
         await db.commit()
 
@@ -101,20 +114,93 @@ class RabRepository:
             logger.exception("Unexpected error recording webhook event: %s", e)
             raise
 
-    async def get_all_records(self, limit: int = 50, offset: int = 0) -> list[dict]:
+    async def update_webhook_event_status(self, event_id: str, result: str) -> None:
+        db = await get_db()
+        await db.execute(
+            "UPDATE webhook_events SET status = ? WHERE event_id = ?",
+            (result, event_id),
+        )
+        await db.commit()
+
+    async def get_all_records_with_count(self, limit: int = 50, offset: int = 0, status: str = "", q: str = "") -> tuple[list[dict], int]:
+        db = await get_db()
+        clauses: list[str] = []
+        params: list[object] = []
+        if status:
+            clauses.append("status = ?")
+            params.append(status)
+        if q:
+            clauses.append("issue_key LIKE ?")
+            params.append(f"%{q}%")
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        count_row = await db.execute_fetchall(f"SELECT COUNT(*) FROM rab_records {where}", params)
+        total = count_row[0][0] if count_row else 0
+        rows = await db.execute_fetchall(
+            f"SELECT * FROM rab_records {where} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            params + [limit, offset],
+        )
+        return [dict(r) for r in rows], total
+
+    async def get_status_counts(self) -> dict[str, int]:
+        db = await get_db()
+        rows = await db.execute_fetchall("SELECT status, COUNT(*) AS c FROM rab_records GROUP BY status")
+        return {r["status"]: r["c"] for r in rows}
+
+    @staticmethod
+    def _parse_ts(value: str) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            try:
+                return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            except ValueError:
+                return None
+
+    async def get_pending_approval_count(self) -> int:
         db = await get_db()
         rows = await db.execute_fetchall(
-            "SELECT * FROM rab_records ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            f"SELECT COUNT(*) AS c FROM rab_records WHERE {_PENDING_WHERE}",
+        )
+        return rows[0]["c"] if rows else 0
+
+    async def get_aging_records(self, days: int = 2) -> list[dict]:
+        """Records still waiting for an approval decision for longer than ``days``."""
+        db = await get_db()
+        rows = await db.execute_fetchall(
+            f"SELECT * FROM rab_records WHERE {_PENDING_WHERE} ORDER BY updated_at ASC",
+        )
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        return [
+            dict(r) for r in rows
+            if (updated := self._parse_ts(r["updated_at"])) and updated < cutoff
+        ]
+
+    async def get_recent_failures(self, limit: int = 5) -> list[dict]:
+        """Most recent validation failures and rejections."""
+        db = await get_db()
+        placeholders = ", ".join("?" for _ in _FAILURE_STATUSES)
+        rows = await db.execute_fetchall(
+            f"SELECT * FROM rab_records WHERE status IN ({placeholders}) ORDER BY updated_at DESC LIMIT ?",
+            (*_FAILURE_STATUSES, limit),
+        )
+        return [dict(r) for r in rows]
+
+    async def get_webhook_events(self, limit: int = 100, offset: int = 0) -> list[dict]:
+        db = await get_db()
+        rows = await db.execute_fetchall(
+            "SELECT * FROM webhook_events ORDER BY id DESC LIMIT ? OFFSET ?",
             (limit, offset),
         )
         return [dict(r) for r in rows]
 
-    async def get_all_records_with_count(self, limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
+    async def get_webhook_events_with_count(self, limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
         db = await get_db()
-        count_row = await db.execute_fetchall("SELECT COUNT(*) FROM rab_records")
+        count_row = await db.execute_fetchall("SELECT COUNT(*) FROM webhook_events")
         total = count_row[0][0] if count_row else 0
         rows = await db.execute_fetchall(
-            "SELECT * FROM rab_records ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM webhook_events ORDER BY id DESC LIMIT ? OFFSET ?",
             (limit, offset),
         )
         return [dict(r) for r in rows], total

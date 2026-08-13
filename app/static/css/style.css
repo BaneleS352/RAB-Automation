@@ -163,11 +163,31 @@ tr:nth-child(even) {
     font-weight: 600;
 }
 
-.badge-validated, .badge-approved, .badge-requested { background: #d4edda; color: #155724; }
-.badge-validation_failed, .badge-validation-failed, .badge-rejected, .badge-rejected_by_sdl, .badge-rejected_by_sdm { background: #f8d7da; color: #721c24; }
+.badge-validated, .badge-approved, .badge-requested, .badge-received { background: #d4edda; color: #155724; }
 .badge-pending { background: #fff3cd; color: #856404; }
-.badge-release_ready, .badge-release-ready { background: #cce5ff; color: #004085; }
-.badge-meeting_scheduled, .badge-meeting-scheduled { background: #e2d5f9; color: #5a2d82; }
+.badge-rejected, .badge-failed { background: #f8d7da; color: #721c24; }
+.badge-validated,
+.badge-sdl-approved, .badge-sdm-approved { background: #d4edda; color: #155724; }
+.badge-sdl-requested, .badge-sdm-requested { background: #fff3cd; color: #856404; }
+.badge-sdl-rejected, .badge-sdm-rejected,
+.badge-validation-failed, .badge-validation_failed { background: #f8d7da; color: #721c24; }
+.badge-meeting-scheduled, .badge-release-ready { background: #cce5ff; color: #004085; }
+
+.btn {
+    display: inline-block;
+    background: #1a1a2e;
+    color: #fff;
+    padding: 0.5rem 1.2rem;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 600;
+    border: none;
+    font-size: 0.9rem;
+}
+
+.btn:hover {
+    background: #e94560;
+}
 
 .empty-state {
     text-align: center;
@@ -193,18 +213,142 @@ tr:nth-child(even) {
     margin-top: 1.5rem;
 }
 
-.btn {
-    display: inline-block;
-    background: #1a1a2e;
-    color: #fff;
-    padding: 0.5rem 1.2rem;
-    border-radius: 4px;
-    text-decoration: none;
-    font-weight: 600;
+/* Section headers */
+.section-title {
+    margin-top: 2rem;
+    font-size: 1.15rem;
+    font-weight: 700;
 }
 
-.btn:hover {
-    background: #e94560;
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.muted {
+    color: #777;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+
+.btn-outline {
+    background: #fff;
+    color: #1a1a2e;
+    border: 1px solid #ccc;
+}
+
+.btn-outline:hover {
+    background: #f0f0f0;
+    color: #e94560;
+}
+
+.btn-disabled {
+    background: #e8e8e8;
+    color: #999;
+    cursor: not-allowed;
+}
+
+/* KPI grid */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.kpi-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    border-left: 4px solid #ccc;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.kpi-card.kpi-ok { border-left-color: #27ae60; }
+.kpi-card.kpi-warn { border-left-color: #f39c12; }
+.kpi-card.kpi-fail { border-left-color: #e74c3c; }
+
+.kpi-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+}
+
+.kpi-label {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+/* Filter form */
+.filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.filter-form input[type="text"],
+.filter-form select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.field.checkbox-field {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 1rem;
+}
+
+/* Pagination */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.page-info {
+    font-size: 0.9rem;
+    color: #555;
+}
+
+/* Detail page */
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.detail-item-full {
+    grid-column: 1 / -1;
+}
+
+.detail-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #888;
 }
 
 h1 {

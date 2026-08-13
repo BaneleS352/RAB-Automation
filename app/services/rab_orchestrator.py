@@ -5,16 +5,19 @@ import uuid
 
 from app.repositories.rab_repository import RabRepository
 from app.services.approval_service import ApprovalService, ApprovalStep
+from app.services.azure_devops_client import AzureDevOpsClient, AzureDevOpsClientError
 from app.services.card_templates import (
     approval_request_card,
     developer_notification_card,
     meeting_decision_card,
+    meeting_needed_card,
     rejection_notification_card,
+    release_ready_card,
     validation_passed_card,
 )
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
-from app.services.teams_client import TeamsClient, TeamsClientError, get_conversation
+from app.services.teams_client import TeamsClient, TeamsClientError
 
 logger = logging.getLogger(__name__)
 
@@ -27,18 +30,19 @@ class RabOrchestrator:
         teams_client: TeamsClient | None = None,
         approval_service: ApprovalService | None = None,
         rab_repo: RabRepository | None = None,
+        azure_client: AzureDevOpsClient | None = None,
     ) -> None:
         self.jira_client = jira_client or JiraClient()
         self.field_validator = field_validator or FieldValidator()
         self.teams_client = teams_client or TeamsClient()
         self.approval_service = approval_service or ApprovalService()
         self.rab_repo = rab_repo or RabRepository()
+        self.azure_client = azure_client or AzureDevOpsClient()
 
     async def handle_jira_event(
         self,
         issue_key: str,
         event_type: str | None,
-        payload: dict,
     ) -> str:
         logger.info("Orchestrator received event: issue_key=%s, event_type=%s", issue_key, event_type)
 
@@ -60,7 +64,7 @@ class RabOrchestrator:
         summary = issue_data.get("fields", {}).get("summary", "No summary")
         self.approval_service.create_approval(issue_key, summary)
 
-        await self._request_sdl_approval(issue_key, summary)
+        await self._request_approval(issue_key, summary, ApprovalStep.SDL)
         return "approval_requested_sdl"
 
     async def _fetch_issue(self, issue_key: str) -> dict | None:
@@ -77,37 +81,32 @@ class RabOrchestrator:
             logger.error("Failed to add comment for %s: %s", issue_key, e)
 
     async def _send_card(self, title: str, card: dict) -> None:
-        if not self.teams_client._is_configured():
+        if not self.teams_client.is_configured():
+            logger.warning("Teams is not configured — notification '%s' was not delivered", title)
             return
         try:
-            if self.teams_client._is_webhook_configured():
+            if self.teams_client.is_webhook_configured():
                 await self.teams_client.send_adaptive_card_via_webhook(card)
                 return
-            conv = get_conversation("channel")
-            if conv:
-                await self.teams_client.send_adaptive_card(conv, card)
-            elif self.teams_client.settings.TEAMS_CHANNEL_ID:
+            if self.teams_client.settings.TEAMS_CHANNEL_ID:
                 await self.teams_client.send_card_to_channel(
                     self.teams_client.settings.TEAMS_CHANNEL_ID, card,
                 )
         except TeamsClientError as e:
             logger.error("Teams send failed: %s", e)
 
-    async def _request_sdl_approval(self, issue_key: str, summary: str) -> None:
+    async def _request_approval(self, issue_key: str, summary: str, step: ApprovalStep) -> None:
         approval_id = str(uuid.uuid4())
         self.approval_service.record_approval_id(issue_key, approval_id)
-        await self.rab_repo.upsert_record(issue_key, {"sdl_approval": "requested"})
-        card = approval_request_card(issue_key, summary, "SDL", approval_id)
-        await self._add_comment(issue_key, "RAB Automation: SDL approval requested.")
-        await self._send_card(f"SDL Approval: {issue_key}", card)
-
-    async def _request_sdm_approval(self, issue_key: str, summary: str) -> None:
-        approval_id = str(uuid.uuid4())
-        self.approval_service.record_approval_id(issue_key, approval_id)
-        await self.rab_repo.upsert_record(issue_key, {"sdm_approval": "requested"})
-        card = approval_request_card(issue_key, summary, "SDM", approval_id)
-        await self._add_comment(issue_key, "RAB Automation: SDM approval requested.")
-        await self._send_card(f"SDM Approval: {issue_key}", card)
+        column = f"{step.value.lower()}_approval"
+        await self.rab_repo.upsert_record(issue_key, {
+            column: "requested",
+            f"{column}_id": approval_id,
+            "status": f"{step.value.lower()}_requested",
+        })
+        card = approval_request_card(issue_key, summary, step.value, approval_id)
+        await self._add_comment(issue_key, f"RAB Automation: {step.value} approval requested.")
+        await self._send_card(f"{step.value} Approval: {issue_key}", card)
 
     async def handle_approval_callback(
         self,
@@ -115,16 +114,32 @@ class RabOrchestrator:
         action: str,
         approver: str = "",
         reason: str | None = None,
+        approval_id: str = "",
     ) -> dict:
         state = self.approval_service.get_approval(issue_key)
         if not state:
-            return {"status": "error", "detail": "No active approval"}
+            record = await self.rab_repo.get_record(issue_key)
+            state = self.approval_service.load_from_record(record) if record else None
+            if not state:
+                return {"status": "error", "detail": "No active approval"}
 
         step = "SDL" if state.current_step == ApprovalStep.SDL else "SDM"
-        await self.rab_repo.record_approval_event(issue_key, step, action, approver, reason or "")
+        recorded = state.sdl_approval_id if step == "SDL" else state.sdm_approval_id
+        if approval_id and recorded and approval_id != recorded:
+            logger.warning(
+                "Rejected callback for %s: approval_id %s does not match recorded %s id %s",
+                issue_key, approval_id, step, recorded,
+            )
+            return {"status": "error", "detail": f"Invalid approval reference for {step} step"}
 
         result = self.approval_service.process_response(issue_key, action, reason)
         decision = result.get("decision")
+
+        if result.get("error") and decision is None:
+            logger.warning("Approval callback rejected for %s: %s", issue_key, result["error"])
+            return {"status": "error", "detail": result["error"]}
+
+        await self.rab_repo.record_approval_event(issue_key, step, action, approver, reason or "")
 
         if decision == "rejected":
             rejected_by = result["rejected_by"]
@@ -147,7 +162,7 @@ class RabOrchestrator:
 
             next_step = result.get("next_step")
             if next_step == ApprovalStep.SDM.value:
-                await self._request_sdm_approval(issue_key, state.summary)
+                await self._request_approval(issue_key, state.summary, ApprovalStep.SDM)
                 return {"status": "approved", "detail": "SDL approved — SDM approval requested", "next": "sdm"}
             else:
                 await self._add_comment(issue_key, "RAB Automation: All approvals complete. Requesting meeting decision.")
@@ -161,22 +176,44 @@ class RabOrchestrator:
         await self._send_card(f"Meeting Decision: {issue_key}", card)
         await self._add_comment(issue_key, "RAB Automation: Meeting decision requested.")
 
+    async def _refresh_azure_status(self, issue_key: str) -> None:
+        """Populate azure_pr_status / azure_pipeline_status from the ticket's PR and pipeline links."""
+        if not self.azure_client.is_configured():
+            return
+        issue_data = await self._fetch_issue(issue_key)
+        if not issue_data:
+            return
+        update: dict[str, str] = {}
+        pr_link = self.field_validator.extract_field_value(issue_data, "pr_link")
+        if pr_link:
+            try:
+                pr = await self.azure_client.get_pull_request_by_url(pr_link)
+                update["azure_pr_status"] = str(pr.get("status", "") or "")
+            except AzureDevOpsClientError as e:
+                logger.error("Failed to fetch PR status for %s: %s", issue_key, e)
+        pipeline_link = self.field_validator.extract_field_value(issue_data, "pipeline_link")
+        if pipeline_link:
+            try:
+                run = await self.azure_client.get_pipeline_run_by_url(pipeline_link)
+                status = str(run.get("status", "") or "")
+                result = run.get("result")
+                update["azure_pipeline_status"] = f"{status}:{result}" if result else status
+            except AzureDevOpsClientError as e:
+                logger.error("Failed to fetch pipeline status for %s: %s", issue_key, e)
+        if update:
+            await self.rab_repo.upsert_record(issue_key, update)
+
     async def handle_meeting_callback(self, issue_key: str, needs_meeting: bool) -> str:
+        await self._refresh_azure_status(issue_key)
         await self.rab_repo.upsert_record(issue_key, {
             "meeting_needed": 1 if needs_meeting else 0,
             "status": "meeting_scheduled" if needs_meeting else "release_ready",
         })
         if needs_meeting:
             await self._add_comment(issue_key, "RAB Automation: Meeting will be scheduled. Resolving attendees from ticket.")
-            await self._send_card(
-                "Meeting Needed",
-                {"type": "AdaptiveCard", "version": "1.4", "body": [{"type": "TextBlock", "text": f"Meeting required for {issue_key}. Resolve attendees from ticket fields."}]},
-            )
+            await self._send_card("Meeting Needed", meeting_needed_card(issue_key))
             return "meeting_scheduled"
         else:
             await self._add_comment(issue_key, "RAB Automation: No meeting needed — release ticket finalized.")
-            await self._send_card(
-                "Release Ready",
-                {"type": "AdaptiveCard", "version": "1.4", "body": [{"type": "TextBlock", "text": f"Release ticket {issue_key} is ready for deployment."}]},
-            )
+            await self._send_card("Release Ready", release_ready_card(issue_key))
             return "release_ready"

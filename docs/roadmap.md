@@ -3,7 +3,7 @@
 ## Current status
 
 The service is feature-complete for the core RAB automation loop and fully
-documented. **146 tests pass** across 18 files.
+documented. **163 tests pass** across 18 files.
 
 ### What works today
 

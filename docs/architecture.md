@@ -49,9 +49,9 @@ The module-level `app = create_app()` is what uvicorn imports.
 | `app/api/health.py` | `/health` | JSON health with per-integration status |
 | `app/api/webhooks.py` | `/webhooks/jira` | Jira event ingestion + idempotency |
 | `app/api/teams.py` | `/webhooks/teams` | Bot Framework activities + MessageCard `HttpPOST` callbacks (card clicks) |
-| `app/api/rab.py` | `/rab` | Audit-record JSON queries |
+| `app/api/rab.py` | `/rab` | Audit-record JSON queries (records, timeline, webhook events, summary) |
 | `app/api/demo.py` | `/demo` | Simulated approval flow |
-| `app/api/dashboard.py` | `/dashboard` | HTML pages (health/records/test) |
+| `app/api/dashboard.py` | `/dashboard` | HTML pages (overview, records, detail, webhooks, metrics, demo, tests) |
 | `app/api/metrics.py` | `/metrics` | Operational counters + ASGI middleware |
 
 All are aggregated in `app/api/routes.py`.
@@ -165,9 +165,13 @@ input reaches SQL identifiers.
 | `record_approval_event(...)` | Insert an `approval_events` row + update status |
 | `record_webhook_event(...)` | Insert a dedup row (returns False on conflict) |
 | `get_all_records(limit, offset)` | Paginated list |
-| `get_all_records_with_count(limit, offset)` | Paginated list + total |
+| `get_all_records_with_count(limit, offset, status, q)` | Paginated list + total with optional status/search filters |
 | `get_record(issue_key)` | One record |
-| `get_approval_events(issue_key)` | Event history for one issue |
+| `get_approval_events(issue_key)` | Full `approval_events` timeline for an issue |
+| `get_status_counts()` | `status → count` for the dashboard KPIs |
+| `get_aging_records(days)` | Tickets still waiting on approval past `days` |
+| `get_recent_failures(limit)` | Latest validation failures / rejections |
+| `get_webhook_events(limit)` / `get_webhook_events_with_count(...)` | Webhook ingestion history |
 
 ## Middleware
 

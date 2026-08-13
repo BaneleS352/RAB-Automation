@@ -81,17 +81,17 @@ async def teams_webhook(request: Request) -> dict:
             action=action,
             approver=from_user,
             reason=reason or None,
+            approval_id=approval_id,
         )
         return {"status": result.get("status", "ok"), "detail": result.get("detail", "")}
 
-    if action == "meeting_yes":
+    if action in ("meeting_yes", "meeting_no"):
         issue_key = value.get("issue_key", "")
-        result = await orchestrator.handle_meeting_callback(issue_key, needs_meeting=True)
-        return {"status": "ok", "detail": result}
-
-    if action == "meeting_no":
-        issue_key = value.get("issue_key", "")
-        result = await orchestrator.handle_meeting_callback(issue_key, needs_meeting=False)
+        if not issue_key:
+            return {"status": "error", "detail": "Missing issue_key"}
+        result = await orchestrator.handle_meeting_callback(
+            issue_key, needs_meeting=(action == "meeting_yes"),
+        )
         return {"status": "ok", "detail": result}
 
     return {"status": "ok"}

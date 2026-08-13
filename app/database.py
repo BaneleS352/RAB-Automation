@@ -41,6 +41,16 @@ async def close_db() -> None:
         logger.info("Database connection closed.")
 
 
+async def _migrate(db: aiosqlite.Connection) -> None:
+    """Idempotent additive schema migrations for existing databases."""
+    rows = await db.execute_fetchall("PRAGMA table_info(rab_records)")
+    columns = {r["name"] for r in rows}
+    if "sdl_approval_id" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN sdl_approval_id TEXT DEFAULT ''")
+    if "sdm_approval_id" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN sdm_approval_id TEXT DEFAULT ''")
+
+
 async def init_db() -> None:
     db = await get_db()
     await db.executescript("""
@@ -84,5 +94,7 @@ async def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_approval_issue ON approval_events(issue_key);
         CREATE INDEX IF NOT EXISTS idx_webhook_event_id ON webhook_events(event_id);
     """)
+    await db.commit()
+    await _migrate(db)
     await db.commit()
     logger.info("Database schema initialized.")

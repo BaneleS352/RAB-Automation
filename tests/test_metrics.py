@@ -27,9 +27,6 @@ class TestMetricsEndpoint:
         assert "requests_total" in data
         assert "requests_failed" in data
         assert "avg_duration_ms" in data
-        assert "queue_pending" in data
-        assert "queue_tasks_completed" in data
-        assert "queue_tasks_failed" in data
 
     def test_uptime_is_positive(self, client: TestClient) -> None:
         data = client.get("/metrics").json()
@@ -39,12 +36,6 @@ class TestMetricsEndpoint:
         data1 = client.get("/metrics").json()
         data2 = client.get("/metrics").json()
         assert data2["requests_total"] >= data1["requests_total"]
-
-    def test_queue_defaults(self, client: TestClient) -> None:
-        data = client.get("/metrics").json()
-        assert data["queue_pending"] >= 0
-        assert data["queue_tasks_completed"] >= 0
-        assert data["queue_tasks_failed"] >= 0
 
     def test_avg_duration_is_float(self, client: TestClient) -> None:
         data = client.get("/metrics").json()

@@ -2,7 +2,7 @@
 
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import httpx
 
@@ -30,9 +30,12 @@ class ConversationReference:
 
 # Simple in-memory store for conversation references
 _conversation_store: dict[str, ConversationReference] = {}
+_MAX_CONVERSATIONS = 1024
 
 
 def register_conversation(key: str, ref: ConversationReference) -> None:
+    if key not in _conversation_store and len(_conversation_store) >= _MAX_CONVERSATIONS:
+        _conversation_store.pop(next(iter(_conversation_store)))
     _conversation_store[key] = ref
 
 
@@ -50,11 +53,17 @@ class TeamsClient:
         self._token: str | None = None
         self._token_expiry: float = 0
 
+    def is_configured(self) -> bool:
+        return self.is_webhook_configured() or bool(self.app_id and self.client_secret)
+
+    def is_webhook_configured(self) -> bool:
+        return bool(self.settings.TEAMS_WEBHOOK_URL)
+
     def _is_configured(self) -> bool:
-        return self._is_webhook_configured() or bool(self.app_id and self.client_secret)
+        return self.is_configured()
 
     def _is_webhook_configured(self) -> bool:
-        return bool(self.settings.TEAMS_WEBHOOK_URL)
+        return self.is_webhook_configured()
 
     async def _get_token(self) -> str:
         if self._token and time.time() < self._token_expiry - 60:
@@ -117,15 +126,6 @@ class TeamsClient:
             ],
         }
         return await self.send_activity(conversation.conversation_id, conversation.service_url, activity)
-
-    async def send_message_to_channel(self, channel_id: str, text: str) -> dict:
-        if not self.settings.TEAMS_CHANNEL_ID:
-            raise TeamsClientError("TEAMS_CHANNEL_ID is not configured")
-        ref = ConversationReference(
-            conversation_id=channel_id,
-            service_url="https://smba.trafficmanager.net/amer/",
-        )
-        return await self.send_message(ref, text)
 
     async def send_card_to_channel(self, channel_id: str, card: dict) -> dict:
         if not self.settings.TEAMS_CHANNEL_ID:

@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Demo Flow — RAB Automation{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Demo Approval Flow</h1>
+    <a class="btn btn-outline" href="/dashboard/demo">Reset</a>
+</div>
+<p class="muted">Runs the real SDL → SDM → meeting workflow against a stub Jira client.
+Every stage is logged and persisted to the audit trail — no external services needed.</p>
+
+<form method="get" action="/dashboard/demo" class="filter-form">
+    <input type="hidden" name="run" value="true">
+    <label class="field">
+        <span class="detail-label">Issue Key</span>
+        <input type="text" name="issue_key" value="{{ issue_key }}">
+    </label>
+    <label class="field">
+        <span class="detail-label">Summary</span>
+        <input type="text" name="summary" value="{{ summary }}">
+    </label>
+    <label class="field checkbox-field">
+        <input type="checkbox" name="needs_meeting" value="true" {% if needs_meeting %}checked{% endif %}>
+        <span>Meeting needed</span>
+    </label>
+    <label class="field checkbox-field">
+        <input type="checkbox" name="reject" value="true" {% if reject %}checked{% endif %}>
+        <span>Reject at SDL</span>
+    </label>
+    <button type="submit" class="btn">Run Flow</button>
+</form>
+
+{% if result %}
+<h2 class="section-title">Result: {{ result.status }}</h2>
+<div class="table-wrapper">
+    <table>
+        <thead>
+            <tr>
+                <th>Step</th>
+                <th>Outcome</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in result.steps %}
+            <tr>
+                <td><code>{{ s.step }}</code></td>
+                <td><small>{{ s.detail }}</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="muted"><a href="/dashboard/records/{{ result.issue_key }}">View the audit record for {{ result.issue_key }}</a></p>
+{% endif %}
+{% endblock %}
