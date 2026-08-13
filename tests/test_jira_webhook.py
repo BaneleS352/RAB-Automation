@@ -28,13 +28,28 @@ def client() -> TestClient:
 
 @pytest.fixture(autouse=True)
 def mock_jira_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mock the JiraClient's get_issue method."""
+    """Mock JiraClient methods to avoid real network calls."""
     from app.services.jira_client import JiraClient
-    
-    async def mock_get_issue(self, issue_key: str):
-        return {"id": "10000", "key": issue_key, "fields": {"summary": "Test issue"}}
-    
+
+    async def mock_get_issue(self, issue_key: str, fields: str | None = None):
+        return {
+            "id": "10000",
+            "key": issue_key,
+            "fields": {
+                "summary": "Test issue",
+                "assignee": {"displayName": "Test User"},
+                "reporter": {"displayName": "Reporter User"},
+            },
+        }
+
+    async def mock_add_comment(self, issue_key: str, body: str) -> dict:
+        return {"id": "10001"}
+
     monkeypatch.setattr(JiraClient, "get_issue", mock_get_issue)
+    monkeypatch.setattr(JiraClient, "add_comment", mock_add_comment)
+    monkeypatch.setattr(JiraClient, "get_issue_comments", lambda self, k: [])
+    monkeypatch.setattr(JiraClient, "update_issue", lambda self, k, f: {})
+    monkeypatch.setattr(JiraClient, "transition_issue", lambda self, k, t: {})
 
 
 class TestJiraWebhookSuccess:
@@ -56,9 +71,9 @@ class TestJiraWebhookSuccess:
         data = client.post("/webhooks/jira", json=VALID_PAYLOAD).json()
         assert data["event_type"] == "jira:issue_created"
 
-    def test_response_result_queued(self, client: TestClient) -> None:
+    def test_response_result_approval_requested(self, client: TestClient) -> None:
         data = client.post("/webhooks/jira", json=VALID_PAYLOAD).json()
-        assert data["result"] == "queued_for_processing"
+        assert data["result"] == "approval_requested_sdl"
 
 
 class TestJiraWebhookMissingIssueKey:

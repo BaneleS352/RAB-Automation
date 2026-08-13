@@ -20,5 +20,5 @@ def setup_logging(log_level: str = "INFO") -> None:
         force=True,
     )
 
-    # Quieten noisy third-party loggers
+    # Quiet noisy third-party loggers
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)

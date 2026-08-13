@@ -3,12 +3,22 @@
 from pydantic import BaseModel
 
 
+class JiraConnectionInfo(BaseModel):
+    """Jira API connection status."""
+
+    connected: bool
+    details: str
+
+
 class HealthResponse(BaseModel):
     """Response model for the health check endpoint."""
 
     status: str
     service: str
     environment: str
+    jira: JiraConnectionInfo | None = None
+    azure_devops: JiraConnectionInfo | None = None
+    teams: JiraConnectionInfo | None = None
 
 
 class RootResponse(BaseModel):
@@ -25,3 +35,4 @@ class JiraWebhookResponse(BaseModel):
     issue_key: str
     event_type: str | None = None
     result: str
+    idempotent_replay: bool = False

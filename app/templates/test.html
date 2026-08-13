@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Test Results — RAB Automation{% endblock %}
+{% block content %}
+<h1>Test Suite</h1>
+
+{% if result.timed_out %}
+<div class="health-card status-fail">
+    <h2>Timed Out</h2>
+    <div class="status-badge">FAIL</div>
+    <p class="detail">{{ result.message }}</p>
+    <pre class="test-output">{{ result.output }}</pre>
+</div>
+{% else %}
+<div class="health-card {{ 'status-ok' if result.success else 'status-fail' }}">
+    <h2>{{ result.passed }} passed, {{ result.failed }} failed, {{ result.errors }} errors{% if result.skipped %}, {{ result.skipped }} skipped{% endif %}</h2>
+    <div class="status-badge">{{ 'PASS' if result.success else 'FAIL' }}</div>
+    <p class="detail">Duration: {{ "%.2f"|format(result.duration_seconds) }}s</p>
+</div>
+
+<div class="health-card">
+    <h2>Tests Run ({{ result.tests|length }})</h2>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Test</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for test in result.tests %}
+                <tr>
+                    <td><code>{{ test.nodeid }}</code></td>
+                    <td>
+                        <span class="badge {{ 'badge-validated' if test.status == 'PASSED' else 'badge-pending' if test.status == 'SKIPPED' else 'badge-validation_failed' }}">
+                            {{ test.status }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not result.tests %}
+                <tr>
+                    <td colspan="2" class="empty-state">No individual test results captured.</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="health-card">
+    <h2>Raw Output</h2>
+    <pre class="test-output">{{ result.output }}</pre>
+</div>
+{% endif %}
+
+<div class="actions">
+    <a class="btn" href="/dashboard/test">Run Tests Again</a>
+</div>
+{% endblock %}
