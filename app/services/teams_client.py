@@ -1,4 +1,4 @@
-"""Microsoft Teams / Bot Framework client for sending proactive messages."""
+"""Microsoft Teams client — proactive Bot Framework messages or incoming-webhook delivery."""
 
 import logging
 import time
@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import httpx
 
 from app.config import get_settings
+from app.services.card_templates import to_message_card
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,10 @@ class TeamsClient:
         self._token_expiry: float = 0
 
     def _is_configured(self) -> bool:
-        return bool(self.app_id and self.client_secret)
+        return self._is_webhook_configured() or bool(self.app_id and self.client_secret)
+
+    def _is_webhook_configured(self) -> bool:
+        return bool(self.settings.TEAMS_WEBHOOK_URL)
 
     async def _get_token(self) -> str:
         if self._token and time.time() < self._token_expiry - 60:
@@ -132,7 +136,41 @@ class TeamsClient:
         )
         return await self.send_adaptive_card(ref, card)
 
+    async def _post_webhook(self, message: dict) -> dict:
+        url = self.settings.TEAMS_WEBHOOK_URL
+        headers = {"Content-Type": "application/json"}
+        try:
+            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
+                resp = await client.post(url, json=message, headers=headers)
+                resp.raise_for_status()
+                return {"status": resp.status_code, "content": resp.text[:200]}
+        except httpx.HTTPStatusError as e:
+            raise TeamsClientError(
+                f"Teams webhook error: HTTP {e.response.status_code}: {e.response.text[:200]}"
+            ) from e
+        except httpx.RequestError as e:
+            raise TeamsClientError(f"Failed to reach Teams webhook: {e}") from e
+
+    async def send_message_via_webhook(self, text: str) -> dict:
+        if not self._is_webhook_configured():
+            raise TeamsClientError("TEAMS_WEBHOOK_URL is not configured")
+        message = {
+            "@type": "MessageCard",
+            "@context": "http://schema.org/extensions",
+            "summary": text[:100],
+            "text": text,
+        }
+        return await self._post_webhook(message)
+
+    async def send_adaptive_card_via_webhook(self, card: dict) -> dict:
+        if not self._is_webhook_configured():
+            raise TeamsClientError("TEAMS_WEBHOOK_URL is not configured")
+        message = to_message_card(card, self.settings.TEAMS_CALLBACK_URL or "")
+        return await self._post_webhook(message)
+
     async def check_connection(self) -> dict:
+        if self._is_webhook_configured():
+            return {"connected": True, "details": "Teams incoming webhook configured."}
         if not self._is_configured():
             return {"connected": False, "details": "Teams / Azure Bot is not configured."}
         try:

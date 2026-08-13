@@ -80,6 +80,9 @@ class RabOrchestrator:
         if not self.teams_client._is_configured():
             return
         try:
+            if self.teams_client._is_webhook_configured():
+                await self.teams_client.send_adaptive_card_via_webhook(card)
+                return
             conv = get_conversation("channel")
             if conv:
                 await self.teams_client.send_adaptive_card(conv, card)

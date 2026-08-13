@@ -1,5 +1,8 @@
 """Tests for the Teams Bot Framework webhook endpoint."""
 
+import json
+from urllib.parse import quote, urlencode
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -75,3 +78,43 @@ class TestTeamsWebhook:
         }
         response = client.post("/webhooks/teams", json=payload)
         assert response.status_code == 200
+
+
+class TestMessageCardHttpPostCallback:
+    """MessageCard HttpPOST button callbacks from an incoming webhook."""
+
+    def test_approve_json_payload(self, client: TestClient) -> None:
+        payload = {"action": "approve", "approval_id": "abc", "issue_key": "TEST-1"}
+        response = client.post("/webhooks/teams", json=payload)
+        assert response.status_code == 200
+        assert response.json() == {"status": "approved", "detail": "done"}
+
+    def test_reject_json_payload(self, client: TestClient) -> None:
+        payload = {"action": "reject", "approval_id": "xyz", "issue_key": "TEST-1", "reason": ""}
+        response = client.post("/webhooks/teams", json=payload)
+        assert response.status_code == 200
+
+    def test_meeting_yes_json_payload(self, client: TestClient) -> None:
+        response = client.post("/webhooks/teams", json={"action": "meeting_yes", "issue_key": "TEST-1"})
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "detail": "ok"}
+
+    def test_approve_form_encoded_payload(self, client: TestClient) -> None:
+        payload = json.dumps({"action": "approve", "approval_id": "abc", "issue_key": "TEST-1"})
+        response = client.post(
+            "/webhooks/teams",
+            content=urlencode({"payload": payload}),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"status": "approved", "detail": "done"}
+
+    def test_approve_raw_form_encoded_json(self, client: TestClient) -> None:
+        payload = quote(json.dumps({"action": "meeting_no", "issue_key": "TEST-1"}))
+        response = client.post(
+            "/webhooks/teams",
+            content=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "detail": "ok"}

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The project uses `pytest` with `pytest-asyncio` (auto mode). **129 tests**
+The project uses `pytest` with `pytest-asyncio` (auto mode). **146 tests**
 across **18 files** currently pass. Tests are fully self-contained: no `.env`,
 no live Jira/Azure/Teams, and no touching the real database.
 
@@ -57,8 +57,8 @@ The `--no-header -p no:cacheprovider` flags keep output compact and avoid
 | `test_rab_api.py` | `/rab/records` list + detail |
 | `test_rab_repository.py` | All persistence methods, pagination, dedup |
 | `test_task_queue.py` | Enqueue, completion, failure, stop/start |
-| `test_teams_client.py` | Cards, conversation store, config checks |
-| `test_teams_webhook.py` | Bot activity handling |
+| `test_teams_client.py` | Cards, MessageCard conversion, webhook delivery, conversation store, config checks |
+| `test_teams_webhook.py` | Bot activity handling + MessageCard `HttpPOST` callbacks |
 | `test_webhook_idempotency.py` | `X-Idempotency-Key` dedup |
 
 ## Adding a new test

@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     TEAMS_BOT_CLIENT_SECRET: str = ""
     TEAMS_CHANNEL_ID: str = ""
 
+    # Optional: Teams incoming webhook (no bot registration required).
+    # TEAMS_WEBHOOK_URL is the connector URL; button presses are posted back
+    # to TEAMS_CALLBACK_URL (a publicly reachable URL pointing at /webhooks/teams).
+    TEAMS_WEBHOOK_URL: str = ""
+    TEAMS_CALLBACK_URL: str = ""
+
 
 def get_settings() -> Settings:
     """Return a Settings instance."""

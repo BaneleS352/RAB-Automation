@@ -103,7 +103,8 @@ cached record status.
 
 ### `POST /webhooks/teams`
 
-Receives Bot Framework activities (adaptive-card clicks).
+Receives Bot Framework activities (adaptive-card clicks) **or** MessageCard
+`HttpPOST` callbacks from an incoming webhook.
 
 **Request body** (activity envelope):
 
@@ -118,6 +119,13 @@ Receives Bot Framework activities (adaptive-card clicks).
   },
   "from": { "name": "Jane Doe" }
 }
+```
+
+In webhook mode the button payload is POSTed directly (raw JSON or
+form-url-encoded), without the activity envelope:
+
+```json
+{ "action": "approve", "approval_id": "uuid", "issue_key": "PROJ-123" }
 ```
 
 Supported `value.action` values:

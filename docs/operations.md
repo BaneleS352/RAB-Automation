@@ -124,6 +124,8 @@ spawns a child; Ctrl+C once to stop reloader and child.
 
 - Rotate `JIRA_API_TOKEN`, `AZURE_DEVOPS_PAT`, and `TEAMS_BOT_CLIENT_SECRET`
   periodically; store them in Azure Key Vault in production.
+- Treat `TEAMS_WEBHOOK_URL` like a credential — anyone with the URL can post to
+  the channel. Reset the connector in Teams if it leaks.
 - Keep `JIRA_WEBHOOK_URL` internal — it is the callback target for Jira.
 - Restrict `/metrics`, `/health`, `/rab/records`, and the dashboard to trusted
   networks / SSO via the reverse proxy.

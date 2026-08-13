@@ -3,7 +3,7 @@
 ## Current status
 
 The service is feature-complete for the core RAB automation loop and fully
-documented. **129 tests pass** across 18 files.
+documented. **146 tests pass** across 18 files.
 
 ### What works today
 
@@ -15,7 +15,8 @@ documented. **129 tests pass** across 18 files.
 - JSON query API (`/rab/records`) + Prometheus-style metrics (`/metrics`)
 - HTML dashboard (health, records, test results) with a "Run Tests" button
 - Dummy approval flow (`/demo/flow`) for end-to-end demos without external deps
-- Optional Azure DevOps, Teams/Bot, SharePoint, Azure Key Vault integrations
+- Optional Azure DevOps, Teams (incoming webhook or Bot), SharePoint, Azure
+  Key Vault integrations
 - Production hardening: timeouts, column allowlisting, key-vault error
   sanitization, configurable logging
 

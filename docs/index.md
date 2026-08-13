@@ -23,10 +23,10 @@ workflow with an SQLite audit trail, Teams notifications, and an HTML dashboard.
 - **Framework**: FastAPI (Uvicorn ASGI server)
 - **Persistence**: async SQLite via `aiosqlite`
 - **External integrations**: Jira Cloud (required for full flow),
-  Azure DevOps, Microsoft Teams / Bot Framework (optional)
+  Azure DevOps, Microsoft Teams (incoming webhook or Bot Framework; optional)
 - **Observability**: `/health`, `/metrics`, HTML dashboard,
   structured `INFO` logging
-- **Tests**: `pytest` with `pytest-asyncio`, **129 tests** across 18 files
+- **Tests**: `pytest` with `pytest-asyncio`, **146 tests** across 18 files
 
 ## Feature checklist
 
@@ -40,7 +40,7 @@ workflow with an SQLite audit trail, Teams notifications, and an HTML dashboard.
 - [x] SQLite audit trail (`rab_records`, `approval_events`, `webhook_events`)
 - [x] `GET /rab/records` JSON API with pagination
 - [x] Azure DevOps client (PR + pipeline checks; optional)
-- [x] Teams / Bot Framework notifications (optional)
+- [x] Teams notifications via incoming webhook (MessageCard `HttpPOST` buttons) or Bot Framework (optional)
 - [x] Azure Key Vault secret resolution with env fallback
 - [x] In-process async task queue
 - [x] `/metrics` endpoint + request middleware

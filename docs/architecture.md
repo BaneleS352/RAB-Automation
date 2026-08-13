@@ -48,7 +48,7 @@ The module-level `app = create_app()` is what uvicorn imports.
 |--------|---------------|----------------|
 | `app/api/health.py` | `/health` | JSON health with per-integration status |
 | `app/api/webhooks.py` | `/webhooks/jira` | Jira event ingestion + idempotency |
-| `app/api/teams.py` | `/webhooks/teams` | Bot Framework activities (card clicks) |
+| `app/api/teams.py` | `/webhooks/teams` | Bot Framework activities + MessageCard `HttpPOST` callbacks (card clicks) |
 | `app/api/rab.py` | `/rab` | Audit-record JSON queries |
 | `app/api/demo.py` | `/demo` | Simulated approval flow |
 | `app/api/dashboard.py` | `/dashboard` | HTML pages (health/records/test) |
@@ -112,8 +112,12 @@ PR URL. Unconfigured → `check_connection()` returns disconnected.
 
 ### `teams_client.py` — `TeamsClient`
 
-Bot Framework client. `_get_token()` caches the bearer token with a 60-second
-expiry buffer. `send_activity` / `send_message` / `send_adaptive_card` post to
+Two delivery modes. When `TEAMS_WEBHOOK_URL` is set, cards are posted to the
+incoming webhook as MessageCards (`send_adaptive_card_via_webhook` converts via
+`to_message_card`, turning `Action.Submit` buttons into `HttpPOST` actions
+targeting `TEAMS_CALLBACK_URL`). Otherwise the Bot Framework client is used:
+`_get_token()` caches the bearer token with a 60-second expiry buffer;
+`send_activity` / `send_message` / `send_adaptive_card` post to
 `{serviceUrl}/v3/conversations/{id}/activities`. Also manages an in-memory
 conversation store (`register_conversation` / `get_conversation`).
 
@@ -121,7 +125,8 @@ conversation store (`register_conversation` / `get_conversation`).
 
 Adaptive Card builders: `validation_passed_card`, `validation_failed_card`,
 `approval_request_card`, `rejection_notification_card`, `meeting_decision_card`,
-`developer_notification_card`.
+`developer_notification_card`. `to_message_card(card, callback_url)` converts an
+AdaptiveCard into an Office 365 MessageCard for incoming-webhook delivery.
 
 ### `key_vault_client.py` — `KeyVaultClient`
 
