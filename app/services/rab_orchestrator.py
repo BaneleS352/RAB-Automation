@@ -3,6 +3,7 @@
 import logging
 import uuid
 
+from app.services.status_codes import RabStatus
 from app.repositories.rab_repository import RabRepository
 from app.services.approval_service import ApprovalService, ApprovalStep
 from app.services.azure_devops_client import AzureDevOpsClient, AzureDevOpsClientError
@@ -20,6 +21,8 @@ from app.services.jira_client import JiraClient, JiraClientError
 from app.services.teams_client import TeamsClient, TeamsClientError
 
 logger = logging.getLogger(__name__)
+
+_START_EVENT_TYPES = {"jira:issue_created", "jira:issue_updated"}
 
 
 class RabOrchestrator:
@@ -45,6 +48,18 @@ class RabOrchestrator:
         event_type: str | None,
     ) -> str:
         logger.info("Orchestrator received event: issue_key=%s, event_type=%s", issue_key, event_type)
+
+        if event_type is not None and event_type not in _START_EVENT_TYPES:
+            logger.info("Event %s is not a workflow-starting event for %s — ignoring", event_type, issue_key)
+            return "ignored_non_start_event"
+
+        existing = self.approval_service.get_approval(issue_key)
+        if existing is None:
+            record = await self.rab_repo.get_record(issue_key)
+            existing = self.approval_service.load_from_record(record) if record else None
+        if existing is not None:
+            logger.info("Workflow already started for %s — ignoring start event %s", issue_key, event_type)
+            return "already_in_progress"
 
         issue_data = await self._fetch_issue(issue_key)
         if not issue_data:
@@ -99,10 +114,14 @@ class RabOrchestrator:
         approval_id = str(uuid.uuid4())
         self.approval_service.record_approval_id(issue_key, approval_id)
         column = f"{step.value.lower()}_approval"
+        if step == ApprovalStep.SDL:
+            status_val = RabStatus.SDL_REQUESTED.value
+        else:
+            status_val = RabStatus.SDM_REQUESTED.value
         await self.rab_repo.upsert_record(issue_key, {
             column: "requested",
             f"{column}_id": approval_id,
-            "status": f"{step.value.lower()}_requested",
+            "status": status_val,
         })
         card = approval_request_card(issue_key, summary, step.value, approval_id)
         await self._add_comment(issue_key, f"RAB Automation: {step.value} approval requested.")
@@ -207,7 +226,7 @@ class RabOrchestrator:
         await self._refresh_azure_status(issue_key)
         await self.rab_repo.upsert_record(issue_key, {
             "meeting_needed": 1 if needs_meeting else 0,
-            "status": "meeting_scheduled" if needs_meeting else "release_ready",
+            "status": RabStatus.MEETING_SCHEDULED.value if needs_meeting else RabStatus.RELEASE_READY.value,
         })
         if needs_meeting:
             await self._add_comment(issue_key, "RAB Automation: Meeting will be scheduled. Resolving attendees from ticket.")

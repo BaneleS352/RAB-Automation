@@ -38,6 +38,13 @@ class ApprovalService:
     """Manages sequential SDL → SDM approval workflow for a ticket."""
 
     def create_approval(self, issue_key: str, summary: str) -> ApprovalState:
+        existing = _store.get(issue_key)
+        if existing is not None:
+            logger.info(
+                "Approval already exists for %s — refusing to overwrite (current_step=%s)",
+                issue_key, existing.current_step.value,
+            )
+            return existing
         state = ApprovalState(issue_key=issue_key, summary=summary)
         _store[issue_key] = state
         logger.info("Approval created for %s: current_step=%s", issue_key, state.current_step.value)
@@ -171,3 +178,6 @@ class ApprovalService:
 
     def reset(self) -> None:
         _store.clear()
+
+    def reset_issue(self, issue_key: str) -> None:
+        _store.pop(issue_key, None)

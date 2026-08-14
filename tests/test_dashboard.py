@@ -248,7 +248,10 @@ class TestDashboardDemo:
         assert "Run Flow" in body
 
     def test_run_shows_steps(self, client: TestClient) -> None:
-        body = client.get("/dashboard/demo?run=true&issue_key=DEMO-UI-1").text
+        body = client.post(
+            "/dashboard/demo",
+            data={"issue_key": "DEMO-UI-1"},
+        ).text
         assert "Result: ok" in body
         assert "sdl_approval" in body
         assert "meeting_decision" in body
@@ -289,13 +292,13 @@ class TestDashboardTest:
         assert response.headers["content-type"].startswith("text/html")
 
     def test_shows_pass_summary(self, client: TestClient) -> None:
-        body = client.get("/dashboard/test").text
+        body = client.post("/dashboard/test").text
         assert "118 passed" in body
         assert "PASS" in body
         assert "Run Tests Again" in body
 
     def test_shows_test_breakdown(self, client: TestClient) -> None:
-        body = client.get("/dashboard/test").text
+        body = client.post("/dashboard/test").text
         assert "Tests Run (3)" in body
         assert "test_create_approval" in body
         assert "test_sdl_approve_moves_to_sdm" in body
@@ -318,7 +321,7 @@ class TestDashboardTest:
                 ],
             )
         monkeypatch.setattr("app.api.dashboard.run_test_suite", mock_run)
-        body = client.get("/dashboard/test").text
+        body = client.post("/dashboard/test").text
         assert "8 failed" in body
         assert "FAIL" in body
         assert "badge-validation_failed" in body

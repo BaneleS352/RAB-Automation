@@ -1,10 +1,11 @@
 """Dashboard HTML views for health, audit records, webhooks, metrics, and demo."""
 
+import asyncio
 import logging
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -14,7 +15,8 @@ from app.services.azure_devops_client import AzureDevOpsClient
 from app.services.dummy_flow import DummyFlowService
 from app.services.jira_client import JiraClient
 from app.services.teams_client import TeamsClient
-from app.services.test_runner import run_test_suite
+from app.services.test_runner import run_test_suite, TestRunResult
+from app.services.status_codes import KNOWN_STATUSES as STATUS_CODE_KNOWN_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,9 @@ _WEBHOOK_PAGE_SIZE = 50
 
 _HEALTH_CACHE_TTL = 30.0
 _health_cache: dict = {"at": 0.0, "services": None}
+
+_test_run_lock = asyncio.Lock()
+_last_test_result: TestRunResult | None = None
 
 
 async def _check_connection_status() -> dict:
@@ -55,19 +60,7 @@ async def _check_connection_status() -> dict:
     _health_cache["services"] = services
     return services
 
-_KNOWN_STATUSES = [
-    "pending",
-    "validated",
-    "validation_failed",
-    "sdl_requested",
-    "sdl_approved",
-    "sdl_rejected",
-    "sdm_requested",
-    "sdm_approved",
-    "sdm_rejected",
-    "release_ready",
-    "meeting_scheduled",
-]
+_KNOWN_STATUSES: list[str] = STATUS_CODE_KNOWN_STATUSES
 
 
 @router.get("/health", response_class=HTMLResponse)
@@ -153,18 +146,38 @@ async def dashboard_metrics(request: Request) -> HTMLResponse:
 
 
 @router.get("/demo", response_class=HTMLResponse)
-async def dashboard_demo(
+async def dashboard_demo_form(
     request: Request,
     issue_key: str = Query("DEMO-1"),
     summary: str = Query("Demo release ticket"),
     needs_meeting: bool = Query(False),
     reject: bool = Query(False),
-    run: bool = Query(False),
 ) -> HTMLResponse:
-    result = None
-    if run:
-        service = DummyFlowService(issue_key=issue_key, summary=summary)
-        result = await service.run_rejection() if reject else await service.run_full_approval(needs_meeting=needs_meeting)
+    """Render the demo approval flow form page."""
+    return templates.TemplateResponse(
+        request,
+        "demo.html",
+        {
+            "result": None,
+            "issue_key": issue_key,
+            "summary": summary,
+            "needs_meeting": needs_meeting,
+            "reject": reject,
+        },
+    )
+
+
+@router.post("/demo", response_class=HTMLResponse)
+async def dashboard_demo_run(
+    request: Request,
+    issue_key: str = Form("DEMO-1"),
+    summary: str = Form("Demo release ticket"),
+    needs_meeting: bool = Form(False),
+    reject: bool = Form(False),
+) -> HTMLResponse:
+    """Run the demo approval flow and render the result."""
+    service = DummyFlowService(issue_key=issue_key, summary=summary)
+    result = await service.run_rejection() if reject else await service.run_full_approval(needs_meeting=needs_meeting)
     return templates.TemplateResponse(
         request,
         "demo.html",
@@ -179,6 +192,32 @@ async def dashboard_demo(
 
 
 @router.get("/test", response_class=HTMLResponse)
+async def dashboard_test_form(request: Request) -> HTMLResponse:
+    """Render the test results page (last run result or empty state)."""
+    global _last_test_result
+    return templates.TemplateResponse(
+        request,
+        "test.html",
+        {"result": _last_test_result, "notice": ""},
+    )
+
+
+@router.post("/test", response_class=HTMLResponse)
 async def dashboard_test(request: Request) -> HTMLResponse:
-    result = await run_test_suite()
-    return templates.TemplateResponse(request, "test.html", {"result": result})
+    """Run the pytest suite with token gating and single-flight lock."""
+    global _last_test_result
+    from app.config import get_settings
+    from app.api.auth import AccessTokenMiddleware
+
+    token = get_settings().ACCESS_TOKEN
+    if token and AccessTokenMiddleware._token_from(request) != token:
+        return HTMLResponse("Unauthorized", status_code=401)
+    if _test_run_lock.locked():
+        return templates.TemplateResponse(
+            request,
+            "test.html",
+            {"result": _last_test_result, "notice": "A test run is already in progress. Please wait."},
+        )
+    async with _test_run_lock:
+        _last_test_result = await run_test_suite()
+    return templates.TemplateResponse(request, "test.html", {"result": _last_test_result, "notice": ""})

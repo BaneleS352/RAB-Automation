@@ -205,6 +205,13 @@ class RabRepository:
         )
         return [dict(r) for r in rows], total
 
+    async def get_webhook_event(self, event_id: str) -> dict | None:
+        db = await get_db()
+        rows = await db.execute_fetchall(
+            "SELECT * FROM webhook_events WHERE event_id = ?", (event_id,)
+        )
+        return dict(rows[0]) if rows else None
+
     async def get_record(self, issue_key: str) -> dict | None:
         db = await get_db()
         rows = await db.execute_fetchall(
@@ -218,3 +225,10 @@ class RabRepository:
             "SELECT * FROM approval_events WHERE issue_key = ? ORDER BY created_at", (issue_key,)
         )
         return [dict(r) for r in rows]
+
+    async def delete_record(self, issue_key: str) -> None:
+        """Remove all persisted state for an issue (used by the demo flow to allow re-runs)."""
+        db = await get_db()
+        await db.execute("DELETE FROM rab_records WHERE issue_key = ?", (issue_key,))
+        await db.execute("DELETE FROM approval_events WHERE issue_key = ?", (issue_key,))
+        await db.commit()

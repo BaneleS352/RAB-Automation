@@ -3,7 +3,15 @@
 {% block content %}
 <h1>Test Suite</h1>
 
-{% if result.timed_out %}
+{% if notice %}
+<div class="health-card">
+    <p class="detail">{{ notice }}</p>
+</div>
+{% elif result is none %}
+<div class="health-card">
+    <p class="detail">No test run yet — click "Run Tests" to execute the suite.</p>
+</div>
+{% elif result.timed_out %}
 <div class="health-card status-fail">
     <h2>Timed Out</h2>
     <div class="status-badge">FAIL</div>
@@ -55,6 +63,8 @@
 {% endif %}
 
 <div class="actions">
-    <a class="btn" href="/dashboard/test">Run Tests Again</a>
+    <form method="post" action="/dashboard/test">
+        <button type="submit" class="btn">Run Tests Again</button>
+    </form>
 </div>
 {% endblock %}

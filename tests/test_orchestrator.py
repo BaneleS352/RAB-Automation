@@ -179,6 +179,67 @@ class TestAzureStatusTracking:
         assert record["azure_pipeline_status"] == ""
 
 
+class TestFlowStartGuards:
+    @pytest.mark.asyncio
+    async def test_non_start_event_does_not_start_flow(self) -> None:
+        orch = RabOrchestrator(jira_client=StubJiraClient(), rab_repo=RabRepository())
+        result = await orch.handle_jira_event("ORCH-G1", "jira:comment_created")
+        assert result == "ignored_non_start_event"
+        assert await RabRepository().get_record("ORCH-G1") is None
+
+    @pytest.mark.asyncio
+    async def test_repeat_start_event_with_active_flow_is_ignored(self) -> None:
+        orch = RabOrchestrator(jira_client=StubJiraClient(), rab_repo=RabRepository())
+        first = await orch.handle_jira_event("ORCH-G2", "jira:issue_created")
+        assert first == "approval_requested_sdl"
+        second = await orch.handle_jira_event("ORCH-G2", "jira:issue_created")
+        assert second == "already_in_progress"
+
+    @pytest.mark.asyncio
+    async def test_start_event_with_db_state_hydrated_is_ignored(self) -> None:
+        repo = RabRepository()
+        await repo.upsert_record("ORCH-G3", {
+            "issue_key": "ORCH-G3", "summary": "Live", "status": "sdl_requested", "sdl_approval": "requested",
+        })
+        orch = RabOrchestrator(jira_client=StubJiraClient(), rab_repo=repo)
+        result = await orch.handle_jira_event("ORCH-G3", "jira:issue_created")
+        assert result == "already_in_progress"
+
+    @pytest.mark.asyncio
+    async def test_issue_updated_reruns_after_validation_failure(self) -> None:
+        """Re-check path: a failed validation leaves no approval state, so an update may restart it."""
+
+        class FlakyValidator:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def validate(self, issue_data: dict):
+                self.calls += 1
+                valid = self.calls > 1
+                return type("V", (), {
+                    "valid": valid,
+                    "detail": "" if valid else "missing fields",
+                    "missing_fields": [] if valid else ["summary"],
+                })()
+
+            def extract_field_value(self, issue_data: dict, field: str):
+                return None
+
+        orch = RabOrchestrator(
+            jira_client=StubJiraClient(), rab_repo=RabRepository(), field_validator=FlakyValidator(),
+        )
+        first = await orch.handle_jira_event("ORCH-G4", "jira:issue_created")
+        assert "validation_failed" in first
+        second = await orch.handle_jira_event("ORCH-G4", "jira:issue_updated")
+        assert second == "approval_requested_sdl"
+
+    @pytest.mark.asyncio
+    async def test_none_event_type_is_treated_as_start(self) -> None:
+        orch = RabOrchestrator(jira_client=StubJiraClient(), rab_repo=RabRepository())
+        result = await orch.handle_jira_event("ORCH-G5", None)
+        assert result == "approval_requested_sdl"
+
+
 class TestDuplicateCallbacks:
     @pytest.mark.asyncio
     async def test_replay_after_full_approval_is_refused(self) -> None:

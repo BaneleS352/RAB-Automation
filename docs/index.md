@@ -9,6 +9,7 @@ workflow with an SQLite audit trail, Teams notifications, and an HTML dashboard.
 | Topic | Guide |
 |-------|-------|
 | Install & configure | [Setup & Configuration](setup.md) |
+| Where to get every credential | [Credentials Guide](credentials.md) |
 | All HTTP endpoints & payloads | [API Reference](api_reference.md) |
 | The SDL → SDM workflow in detail | [Architecture](architecture.md) |
 | SQLite schema & repository layer | [Data & Audit Trail](database.md) |

@@ -26,7 +26,10 @@ pip install -r requirements.txt
 
 ## 2. Environment variables
 
-Copy the example file and fill in your values:
+Copy the example file and fill in your values. For step-by-step instructions
+on creating each credential (Atlassian API tokens, Azure DevOps PATs, Teams
+webhooks/bot secrets, Key Vault secrets), see the
+[Credentials Guide](credentials.md):
 
 ```bash
 cp .env.example .env

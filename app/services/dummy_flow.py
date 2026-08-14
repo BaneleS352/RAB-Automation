@@ -65,9 +65,15 @@ class DummyFlowService:
         logger.info("[DUMMY] %s: %s", step, detail)
         self.steps.append({"step": step, "detail": detail})
 
+    async def _reset_issue(self) -> None:
+        """Clear any prior state for this key so the demo can be re-run."""
+        self.approval_service.reset_issue(self.issue_key)
+        await self.rab_repo.delete_record(self.issue_key)
+
     async def run_full_approval(self, needs_meeting: bool = False) -> DummyFlowResult:
         """Validation → SDL approve → SDM approve → meeting decision."""
         logger.info("Starting dummy RAB flow for %s", self.issue_key)
+        await self._reset_issue()
 
         validation = await self.orchestrator.handle_jira_event(
             issue_key=self.issue_key,
@@ -94,6 +100,7 @@ class DummyFlowService:
     async def run_rejection(self) -> DummyFlowResult:
         """Validation → SDL reject → flow stops."""
         logger.info("Starting dummy RAB rejection flow for %s", self.issue_key)
+        await self._reset_issue()
 
         validation = await self.orchestrator.handle_jira_event(
             issue_key=self.issue_key,

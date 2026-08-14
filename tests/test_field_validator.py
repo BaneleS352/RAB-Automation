@@ -109,3 +109,32 @@ class TestFieldValidator:
         }
         result = validator.validate({"fields": fields})
         assert result.valid is True
+
+    def test_multi_value_list_is_joined(self, monkeypatch):
+        monkeypatch.setenv("JIRA_FIELD_ENVIRONMENT", "customfield_environment")
+        validator = FieldValidator()
+        fields = {
+            "assignee": {"displayName": "Alice"},
+            "reporter": {"displayName": "Bob"},
+            "customfield_environment": [
+                {"value": "Production"},
+                {"value": "Staging"},
+                {"value": ""},
+                None,
+            ],
+        }
+        result = validator.validate({"fields": fields})
+        assert result.valid is True
+        assert validator.extract_field_value({"fields": fields}, "environment") == "Production, Staging"
+
+    def test_all_empty_list_values_count_as_missing(self, monkeypatch):
+        monkeypatch.setenv("JIRA_FIELD_ENVIRONMENT", "customfield_environment")
+        validator = FieldValidator()
+        fields = {
+            "assignee": {"displayName": "Alice"},
+            "reporter": {"displayName": "Bob"},
+            "customfield_environment": [{"value": ""}, {"value": ""}],
+        }
+        result = validator.validate({"fields": fields})
+        assert result.valid is False
+        assert "Environment" in result.missing_fields

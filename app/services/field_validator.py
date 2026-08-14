@@ -73,8 +73,17 @@ class FieldValidator:
         if isinstance(value, list):
             if not value:
                 return None
-            item = value[0]
-            return item.get("value") if isinstance(item, dict) else str(item)
+            parts: list[str] = []
+            for item in value:
+                if item is None:
+                    continue
+                if isinstance(item, dict):
+                    part = item.get("displayName") or item.get("value") or item.get("name")
+                else:
+                    part = str(item)
+                if isinstance(part, str) and part.strip():
+                    parts.append(part.strip())
+            return ", ".join(parts) if parts else None
         return value if isinstance(value, str) else str(value)
 
     def validate(self, issue_data: dict) -> ValidationResult:
