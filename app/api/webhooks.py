@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import threading
 import uuid
 
 from fastapi import APIRouter, Header
@@ -21,6 +22,7 @@ rab_repo = RabRepository()
 
 _event_locks: dict[str, asyncio.Lock] = {}
 _MAX_EVENT_LOCKS = 1024
+_locks_lock = threading.Lock()
 
 
 def _get_event_lock(event_id: str) -> asyncio.Lock:
@@ -30,16 +32,17 @@ def _get_event_lock(event_id: str) -> asyncio.Lock:
     unlocked entries are eligible — a held lock must not be dropped while a
     webhook is still being processed.
     """
-    lock = _event_locks.get(event_id)
-    if lock is None:
-        if len(_event_locks) >= _MAX_EVENT_LOCKS:
-            for existing_id in list(_event_locks):
-                if not _event_locks[existing_id].locked():
-                    del _event_locks[existing_id]
-                    break
-        lock = asyncio.Lock()
-        _event_locks[event_id] = lock
-    return lock
+    with _locks_lock:
+        lock = _event_locks.get(event_id)
+        if lock is None:
+            if len(_event_locks) >= _MAX_EVENT_LOCKS:
+                for existing_id in list(_event_locks):
+                    if not _event_locks[existing_id].locked():
+                        del _event_locks[existing_id]
+                        break
+            lock = asyncio.Lock()
+            _event_locks[event_id] = lock
+        return lock
 
 
 async def _process_webhook(
@@ -103,7 +106,8 @@ async def jira_webhook(
     event_id = x_idempotency_key or str(uuid.uuid4())
 
     if x_idempotency_key:
-        async with _get_event_lock(event_id):
+        lock = _get_event_lock(event_id)
+        async with lock:
             return await _process_webhook(event_id, issue_key, payload, keyed=True)
 
     return await _process_webhook(event_id, issue_key, payload, keyed=False)

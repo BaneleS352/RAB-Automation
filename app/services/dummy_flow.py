@@ -46,6 +46,13 @@ class DummyFlowResult:
     status: str = "ok"
 
 
+class _DemoPassValidator:
+    """Validator that always passes for demo — avoids fail-closed on missing JIRA_FIELD_* mappings."""
+    def validate(self, issue_data: dict):
+        return type("V", (), {"valid": True, "detail": "All required fields are present.", "missing_fields": []})()
+    def extract_field_value(self, *a, **kw): return "demo"
+
+
 class DummyFlowService:
     """Runs the full SDL → SDM → meeting RAB workflow against stub services."""
 
@@ -56,6 +63,7 @@ class DummyFlowService:
         self.rab_repo = RabRepository()
         self.orchestrator = RabOrchestrator(
             jira_client=StubJiraClient(issue_key, summary),
+            field_validator=_DemoPassValidator(),
             approval_service=self.approval_service,
             rab_repo=self.rab_repo,
         )

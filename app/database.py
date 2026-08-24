@@ -1,5 +1,6 @@
 """Async SQLite database setup and connection management."""
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -22,23 +23,48 @@ def _get_db_path() -> Path:
 DB_PATH = _get_db_path()
 
 _connection: aiosqlite.Connection | None = None
+_db_lock = asyncio.Lock()
+_db_path_cached: Path | None = None
 
 
 async def get_db() -> aiosqlite.Connection:
-    global _connection
+    global _connection, _db_path_cached
+    # Re-resolve path if env changed (fixes frozen DB_PATH at import)
+    current_path = _get_db_path()
+    if _connection is not None and _db_path_cached is not None and current_path != _db_path_cached:
+        # Path changed — close old connection
+        try:
+            await _connection.close()
+        except Exception:
+            pass
+        _connection = None
     if _connection is None:
-        _connection = await aiosqlite.connect(str(DB_PATH))
-        _connection.row_factory = aiosqlite.Row
-        logger.info("Database connection opened: %s", DB_PATH)
+        async with _db_lock:
+            if _connection is None:
+                current_path = _get_db_path()
+                _connection = await aiosqlite.connect(str(current_path))
+                _connection.row_factory = aiosqlite.Row
+                try:
+                    await _connection.execute("PRAGMA journal_mode=WAL")
+                    await _connection.execute("PRAGMA busy_timeout=5000")
+                    await _connection.commit()
+                except Exception:
+                    pass
+                _db_path_cached = current_path
+                logger.info("Database connection opened: %s", current_path)
     return _connection
 
 
 async def close_db() -> None:
     global _connection
-    if _connection:
-        await _connection.close()
-        _connection = None
-        logger.info("Database connection closed.")
+    async with _db_lock:
+        if _connection:
+            try:
+                await _connection.close()
+            except Exception:
+                pass
+            _connection = None
+            logger.info("Database connection closed.")
 
 
 async def _migrate(db: aiosqlite.Connection) -> None:

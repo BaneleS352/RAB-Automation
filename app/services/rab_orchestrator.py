@@ -1,5 +1,6 @@
 """RAB Orchestrator – processes Jira events through the full RAB workflow (monitor mode)."""
 
+import asyncio
 import logging
 import uuid
 
@@ -12,6 +13,18 @@ from app.services.status_codes import RabStatus
 logger = logging.getLogger(__name__)
 
 _START_EVENT_TYPES = {"jira:issue_created", "jira:issue_updated"}
+
+_issue_locks: dict[str, asyncio.Lock] = {}
+_issue_locks_lock = asyncio.Lock()
+
+
+async def _get_issue_lock(issue_key: str) -> asyncio.Lock:
+    async with _issue_locks_lock:
+        lock = _issue_locks.get(issue_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            _issue_locks[issue_key] = lock
+        return lock
 
 
 class RabOrchestrator:
@@ -39,48 +52,52 @@ class RabOrchestrator:
 
         if event_type is not None and event_type not in _START_EVENT_TYPES:
             logger.info("Event %s is not a workflow-starting event for %s — monitoring only", event_type, issue_key)
-            issue_data = await self._fetch_issue(issue_key)
-            if issue_data:
-                validation = self.field_validator.validate(issue_data)
-                summary = issue_data.get("fields", {}).get("summary", "") or ""
-                await self.rab_repo.upsert_record(issue_key, {
-                    "summary": summary,
-                    "validation_result": validation.detail if not validation.valid else "",
-                    "status": "validated" if validation.valid else "validation_failed",
-                })
-                existing = await self.rab_repo.get_record(issue_key)
-                if existing and existing.get("status") in ("sdl_requested", "sdm_requested", "sdl_approved", "sdm_approved", "release_ready", "meeting_scheduled", "sdl_rejected", "sdm_rejected"):
-                    await self.rab_repo.upsert_record(issue_key, {"status": existing["status"]})
+            lock = await _get_issue_lock(issue_key)
+            async with lock:
+                issue_data = await self._fetch_issue(issue_key)
+                if issue_data:
+                    validation = self.field_validator.validate(issue_data)
+                    summary = issue_data.get("fields", {}).get("summary", "") or ""
+                    await self.rab_repo.upsert_record(issue_key, {
+                        "summary": summary,
+                        "validation_result": validation.detail if not validation.valid else "",
+                        "status": "validated" if validation.valid else "validation_failed",
+                    })
+                    existing = await self.rab_repo.get_record(issue_key)
+                    if existing and existing.get("status") in ("sdl_requested", "sdm_requested", "sdl_approved", "sdm_approved", "release_ready", "meeting_scheduled", "sdl_rejected", "sdm_rejected"):
+                        await self.rab_repo.upsert_record(issue_key, {"status": existing["status"]})
             return "monitored"
 
-        existing = self.approval_service.get_approval(issue_key)
-        if existing is None:
-            record = await self.rab_repo.get_record(issue_key)
-            existing = self.approval_service.load_from_record(record) if record else None
-        if existing is not None:
-            logger.info("Workflow already started for %s — ignoring start event %s", issue_key, event_type)
-            return "already_in_progress"
+        lock = await _get_issue_lock(issue_key)
+        async with lock:
+            existing = self.approval_service.get_approval(issue_key)
+            if existing is None:
+                record = await self.rab_repo.get_record(issue_key)
+                existing = self.approval_service.load_from_record(record) if record else None
+            if existing is not None:
+                logger.info("Workflow already started for %s — ignoring start event %s", issue_key, event_type)
+                return "already_in_progress"
 
-        issue_data = await self._fetch_issue(issue_key)
-        if not issue_data:
-            return "error_fetching_issue_data"
+            issue_data = await self._fetch_issue(issue_key)
+            if not issue_data:
+                return "error_fetching_issue_data"
 
-        validation = self.field_validator.validate(issue_data)
-        await self.rab_repo.record_validation(issue_key, validation.valid, validation.detail)
-        if not validation.valid:
-            msg = f"Validation failed.\n\n{validation.detail}\n\nPlease update the ticket and trigger re-check."
-            await self._add_comment(issue_key, f"RAB Automation: {msg}")
-            await self._send_card("Validation Failed")
-            return f"validation_failed: {validation.detail}"
+            validation = self.field_validator.validate(issue_data)
+            await self.rab_repo.record_validation(issue_key, validation.valid, validation.detail)
+            if not validation.valid:
+                msg = f"Validation failed.\n\n{validation.detail}\n\nPlease update the ticket and trigger re-check."
+                await self._add_comment(issue_key, f"RAB Automation: {msg}")
+                await self._send_card("Validation Failed")
+                return f"validation_failed: {validation.detail}"
 
-        await self._add_comment(issue_key, "RAB Automation: Ticket validation passed — starting approvals.")
-        await self._send_card("Validation Passed")
+            await self._add_comment(issue_key, "RAB Automation: Ticket validation passed — starting approvals.")
+            await self._send_card("Validation Passed")
 
-        summary = issue_data.get("fields", {}).get("summary", "No summary")
-        self.approval_service.create_approval(issue_key, summary)
+            summary = issue_data.get("fields", {}).get("summary", "No summary")
+            self.approval_service.create_approval(issue_key, summary)
 
-        await self._request_approval(issue_key, summary, ApprovalStep.SDL)
-        return "approval_requested_sdl"
+            await self._request_approval(issue_key, summary, ApprovalStep.SDL)
+            return "approval_requested_sdl"
 
     async def _fetch_issue(self, issue_key: str) -> dict | None:
         try:
@@ -123,69 +140,73 @@ class RabOrchestrator:
         reason: str | None = None,
         approval_id: str = "",
     ) -> dict:
-        state = self.approval_service.get_approval(issue_key)
-        if not state:
-            record = await self.rab_repo.get_record(issue_key)
-            state = self.approval_service.load_from_record(record) if record else None
+        lock = await _get_issue_lock(issue_key)
+        async with lock:
+            state = self.approval_service.get_approval(issue_key)
             if not state:
-                return {"status": "error", "detail": "No active approval"}
+                record = await self.rab_repo.get_record(issue_key)
+                state = self.approval_service.load_from_record(record) if record else None
+                if not state:
+                    return {"status": "error", "detail": "No active approval"}
 
-        step = "SDL" if state.current_step == ApprovalStep.SDL else "SDM"
-        recorded = state.sdl_approval_id if step == "SDL" else state.sdm_approval_id
-        if approval_id and recorded and approval_id != recorded:
-            logger.warning(
-                "Rejected callback for %s: approval_id %s does not match recorded %s id %s",
-                issue_key, approval_id, step, recorded,
-            )
-            return {"status": "error", "detail": f"Invalid approval reference for {step} step"}
+            step = "SDL" if state.current_step == ApprovalStep.SDL else "SDM"
+            recorded = state.sdl_approval_id if step == "SDL" else state.sdm_approval_id
+            if approval_id and recorded and approval_id != recorded:
+                logger.warning(
+                    "Rejected callback for %s: approval_id %s does not match recorded %s id %s",
+                    issue_key, approval_id, step, recorded,
+                )
+                return {"status": "error", "detail": f"Invalid approval reference for {step} step"}
 
-        result = self.approval_service.process_response(issue_key, action, reason)
-        decision = result.get("decision")
+            result = self.approval_service.process_response(issue_key, action, reason)
+            decision = result.get("decision")
 
-        if result.get("error") and decision is None:
-            logger.warning("Approval callback rejected for %s: %s", issue_key, result["error"])
-            return {"status": "error", "detail": result["error"]}
+            if result.get("error") and decision is None:
+                logger.warning("Approval callback rejected for %s: %s", issue_key, result["error"])
+                return {"status": "error", "detail": result["error"]}
 
-        await self.rab_repo.record_approval_event(issue_key, step, action, approver, reason or "")
+            await self.rab_repo.record_approval_event(issue_key, step, action, approver, reason or "")
 
-        if decision == "rejected":
-            rejected_by = result["rejected_by"]
-            await self._add_comment(
-                issue_key,
-                f"RAB Automation: {rejected_by} rejected.\nReason: {reason or 'No reason provided.'}",
-            )
-            await self._send_card(f"Rejected: {issue_key}")
-            return {"status": "rejected", "rejected_by": rejected_by, "detail": f"Rejected by {rejected_by}"}
+            if decision == "rejected":
+                rejected_by = result["rejected_by"]
+                await self._add_comment(
+                    issue_key,
+                    f"RAB Automation: {rejected_by} rejected.\nReason: {reason or 'No reason provided.'}",
+                )
+                await self._send_card(f"Rejected: {issue_key}")
+                return {"status": "rejected", "rejected_by": rejected_by, "detail": f"Rejected by {rejected_by}"}
 
-        if decision == "approved":
-            await self._add_comment(issue_key, f"RAB Automation: {step} approved.")
-            await self._send_card(f"Approved by {step}: {issue_key}")
+            if decision == "approved":
+                await self._add_comment(issue_key, f"RAB Automation: {step} approved.")
+                await self._send_card(f"Approved by {step}: {issue_key}")
 
-            next_step = result.get("next_step")
-            if next_step == ApprovalStep.SDM.value:
-                await self._request_approval(issue_key, state.summary, ApprovalStep.SDM)
-                return {"status": "approved", "detail": "SDL approved — SDM approval requested", "next": "sdm"}
-            else:
-                await self._add_comment(issue_key, "RAB Automation: All approvals complete. Requesting meeting decision.")
-                await self._request_meeting_decision(issue_key)
-                return {"status": "approved", "detail": "All approvals complete", "next": "meeting_decision"}
+                next_step = result.get("next_step")
+                if next_step == ApprovalStep.SDM.value:
+                    await self._request_approval(issue_key, state.summary, ApprovalStep.SDM)
+                    return {"status": "approved", "detail": "SDL approved — SDM approval requested", "next": "sdm"}
+                else:
+                    await self._add_comment(issue_key, "RAB Automation: All approvals complete. Requesting meeting decision.")
+                    await self._request_meeting_decision(issue_key)
+                    return {"status": "approved", "detail": "All approvals complete", "next": "meeting_decision"}
 
-        return {"status": "error", "detail": result.get("error", "Unknown")}
+            return {"status": "error", "detail": result.get("error", "Unknown")}
 
     async def _request_meeting_decision(self, issue_key: str) -> None:
         await self._send_card(f"Meeting Decision: {issue_key}")
         await self._add_comment(issue_key, "RAB Automation: Meeting decision requested.")
 
     async def handle_meeting_callback(self, issue_key: str, needs_meeting: bool) -> str:
-        await self.rab_repo.upsert_record(issue_key, {
-            "meeting_needed": 1 if needs_meeting else 0,
-            "status": RabStatus.MEETING_SCHEDULED.value if needs_meeting else RabStatus.RELEASE_READY.value,
-        })
-        if needs_meeting:
-            await self._add_comment(issue_key, "RAB Automation: Meeting will be scheduled. Resolving attendees from ticket.")
-            await self._send_card("Meeting Needed")
-            return "meeting_scheduled"
-        else:
-            await self._add_comment(issue_key, "RAB Automation: No meeting needed — release ticket finalized.")
-            await self._send_card("Release Ready")
-            return "release_ready"
+        lock = await _get_issue_lock(issue_key)
+        async with lock:
+            await self.rab_repo.upsert_record(issue_key, {
+                "meeting_needed": 1 if needs_meeting else 0,
+                "status": RabStatus.MEETING_SCHEDULED.value if needs_meeting else RabStatus.RELEASE_READY.value,
+            })
+            if needs_meeting:
+                await self._add_comment(issue_key, "RAB Automation: Meeting will be scheduled. Resolving attendees from ticket.")
+                await self._send_card("Meeting Needed")
+                return "meeting_scheduled"
+            else:
+                await self._add_comment(issue_key, "RAB Automation: No meeting needed — release ticket finalized.")
+                await self._send_card("Release Ready")
+                return "release_ready"
