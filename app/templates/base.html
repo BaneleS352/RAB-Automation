@@ -5,17 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#090b0e" />
     <title>{% block title %}RAB Monitor{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260824">
     {% block head_extra %}{% endblock %}
 </head>
 <body>
     <div class="browser-shell">
-        <header class="browser-bar">
-            <div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div>
-            <div class="browser-actions" aria-hidden="true"><span class="split-icon"></span><span>‹</span><span>›</span></div>
-            <div class="address">▣&nbsp;&nbsp; RAB Monitor — Jira Issue Monitor</div>
-            <div class="browser-tools" aria-hidden="true"><span>◉</span><span>⇧</span><span>＋</span><span>▢</span></div>
-        </header>
         <div class="app-shell">
             <aside class="sidebar" id="sidebar">
                 <div class="brand-row">
@@ -49,7 +43,7 @@
                 <div class="profile">
                     <div class="avatar">RM</div>
                     <div><strong>RAB Monitor</strong><span>issue monitor</span></div>
-                    <button aria-label="Profile options">•••</button>
+                    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to light mode" title="Switch theme">☼</button>
                 </div>
             </aside>
             <main class="main">
@@ -76,6 +70,22 @@
         document.querySelectorAll('.nav-groups a').forEach(a => {
             if (a.getAttribute('href') === path) a.classList.add('active');
         });
+        const themeToggle = document.getElementById('themeToggle');
+        const savedTheme = localStorage.getItem('rab-theme');
+        if (savedTheme === 'light') document.body.classList.add('light');
+        function updateThemeButton() {
+            const light = document.body.classList.contains('light');
+            themeToggle.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
+            themeToggle.textContent = light ? '☾' : '☼';
+        }
+        if (themeToggle) {
+            updateThemeButton();
+            themeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('light');
+                localStorage.setItem('rab-theme', document.body.classList.contains('light') ? 'light' : 'dark');
+                updateThemeButton();
+            });
+        }
     </script>
     {% block scripts %}{% endblock %}
 </body>
