@@ -1,56 +1,90 @@
 {% extends "base.html" %}
-{% block title %}Demo Flow — RAB Automation{% endblock %}
+{% block title %}Demo — RAB Monitor{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1>Demo Approval Flow</h1>
-    <a class="btn btn-outline" href="/dashboard/demo">Reset</a>
+    <div>
+        <h1>Demo Approval Flow</h1>
+        <p class="muted" style="margin:0;">Seed the monitor with synthetic Jira issues. Each run creates a real audit record that appears in <a href="/dashboard/records">Audit Records</a> and <a href="/dashboard/health">Overview</a> pipeline summary.</p>
+    </div>
+    <a class="btn btn-ghost btn-sm" href="/dashboard/demo">Reset</a>
 </div>
-<p class="muted">Runs the real SDL → SDM → meeting workflow against a stub Jira client. Every stage is logged and persisted to the audit trail — no external services needed.</p>
 
-<form method="get" action="/dashboard/demo" class="filter-form">
-    <input type="hidden" name="run" value="true">
-    <label class="field">
-        <span class="detail-label">Issue Key</span>
-        <input type="text" name="issue_key" value="{{ issue_key }}">
-    </label>
-    <label class="field">
-        <span class="detail-label">Summary</span>
-        <input type="text" name="summary" value="{{ summary }}">
-    </label>
-    <label class="field checkbox-field">
-        <input type="checkbox" name="needs_meeting" value="true" {% if needs_meeting %}checked{% endif %}>
-        <span>Meeting needed</span>
-    </label>
-    <label class="field checkbox-field">
-        <input type="checkbox" name="reject" value="true" {% if reject %}checked{% endif %}>
-        <span>Reject at SDL</span>
-    </label>
-    <button type="submit" class="btn">Run Flow</button>
-</form>
+<div class="card" style="margin-top:1rem;">
+    <div class="card-header">
+        <h3>Run approval flow</h3>
+        <span class="muted" style="font-size:0.8rem;">SDL → SDM → meeting decision</span>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/dashboard/demo" style="display:flex; flex-wrap:wrap; gap:0.9rem; align-items:flex-end;">
+            <label class="field" style="flex:1; min-width:160px;">
+                <span class="detail-label">Issue Key</span>
+                <input type="text" name="issue_key" value="{{ issue_key }}" required pattern="[A-Z]+-[0-9]+">
+            </label>
+            <label class="field" style="flex:2; min-width:220px;">
+                <span class="detail-label">Summary</span>
+                <input type="text" name="summary" value="{{ summary }}" style="width:100%;">
+            </label>
+            <label class="field checkbox-field">
+                <input type="checkbox" name="needs_meeting" value="true" {% if needs_meeting %}checked{% endif %}>
+                <span>Meeting needed</span>
+            </label>
+            <label class="field checkbox-field">
+                <input type="checkbox" name="reject" value="true" {% if reject %}checked{% endif %}>
+                <span>Reject at SDL</span>
+            </label>
+            <button type="submit" class="btn btn-primary">Run Flow →</button>
+        </form>
+        <p class="muted" style="margin-top:0.75rem;">No external services needed — uses a stub Jira client. Try <code>DEMO-1</code>, <code>DEMO-2</code> then check <a href="/dashboard/records">Issues</a>.</p>
+    </div>
+</div>
 
 {% if result %}
-<h2 class="section-title" style="color: #e94560;">Result: {{ result.status | upper }}</h2>
-<div class="table-wrapper">
-    <table>
-        <thead>
-            <tr>
-                <th>Step</th>
-                <th>Outcome</th>
-            </tr>
-        </thead>
-        <tbody>
+<div class="card" style="margin-top:1.25rem; border-color: {% if result.status == 'ok' %}var(--success-border){% elif result.status == 'rejected' %}var(--danger-border){% else %}var(--border){% endif %}; ">
+    <div class="card-header" style="background: {% if result.status == 'ok' %}var(--success-soft){% elif result.status == 'rejected' %}var(--danger-soft){% else %}var(--surface-2){% endif %};">
+        <h3 style="display:flex; align-items:center; gap:0.5rem;">
+            <span style="width:10px; height:10px; border-radius:50%; background: {% if result.status == 'ok' %}var(--success){% elif result.status == 'rejected' %}var(--danger){% else %}var(--muted){% endif %}; display:inline-block;"></span>
+            Result: {{ result.status | upper }}
+        </h3>
+        <span class="badge" style="background:var(--surface); border-color:var(--border);">{{ result.issue_key }}</span>
+    </div>
+    <div class="card-body">
+        <div class="steps" style="margin-bottom:0.75rem;">
             {% for s in result.steps %}
-            <tr>
-                <td><code>{{ s.step }}</code></td>
-                <td><small style="color: {{ 'green' if 'approved' in s.detail.lower() else 'red' if 'rejected' in s.detail.lower() else 'blue' }}">{{ s.detail }}</small></td>
-            </tr>
+            <span class="step {% if 'rejection' in s.step %}done{% elif 'approved' in s.detail or 'release_ready' in s.detail or 'meeting' in s.detail %}done{% else %}{% endif %}" title="{{ s.detail }}">
+                {{ s.step }}
+            </span>
+            {% if not loop.last %}<span style="color:var(--muted-2);">→</span>{% endif %}
             {% endfor %}
-        </tbody>
-    </table>
+        </div>
+        <div class="table-wrapper" style="box-shadow:none; border-radius:var(--radius);">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Step</th>
+                        <th>Outcome</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in result.steps %}
+                    <tr>
+                        <td><code>{{ s.step }}</code></td>
+                        <td><small>{{ s.detail }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div style="margin-top:0.9rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <a class="btn btn-primary btn-sm" href="/dashboard/records/{{ result.issue_key }}">View audit record →</a>
+            <a class="btn btn-outline btn-sm" href="/dashboard/health">See pipeline summary</a>
+            <a class="btn btn-ghost btn-sm" href="/dashboard/records">All issues</a>
+        </div>
+    </div>
 </div>
-
-<p class="muted"><a href="/dashboard/records/{{ result.issue_key }}" style="color: #1a1a2e; font-weight: 500;">View the audit record for {{ result.issue_key }}</a></p>
 {% else %}
-<p class="empty-state">No flow has been run yet. Use the form above to start the demo approval flow.</p>
+<div class="empty-state" style="margin-top:1rem;">
+    <div style="font-size:1.2rem; margin-bottom:0.4rem;">▶ Run the flow to seed data</div>
+    <span class="muted">Each run persists to the audit trail and updates the <a href="/dashboard/health">pipeline summary</a> KPIs.</span>
+</div>
 {% endif %}
 {% endblock %}

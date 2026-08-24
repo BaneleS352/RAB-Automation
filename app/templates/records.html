@@ -1,9 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Audit Records — RAB Automation{% endblock %}
+{% block title %}Issues — RAB Monitor{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1>RAB Audit Records</h1>
-    <a class="btn btn-outline" href="/dashboard/records?status={{ status }}&q={{ q }}">Refresh</a>
+    <div>
+        <h1>RAB Audit Records</h1>
+        <p class="muted" style="margin:0;">Search, filter and inspect the monitored Jira issues.</p>
+    </div>
+    <a class="btn btn-outline btn-sm" href="/dashboard/records?status={{ status }}&q={{ q }}">↻ Refresh</a>
 </div>
 
 <form method="get" action="/dashboard/records" class="filter-form">
@@ -15,11 +18,11 @@
         <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
         {% endfor %}
     </select>
-    <button type="submit" class="btn">Filter</button>
-    <a class="btn btn-outline" href="/dashboard/records">Clear</a>
+    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+    <a class="btn btn-ghost btn-sm" href="/dashboard/records">Clear</a>
 </form>
 
-<p class="muted">{{ records|length }} of {{ total }} records shown</p>
+<p class="muted">{{ records|length }} of {{ total }} records shown {% if q or status %}— filtered{% endif %}</p>
 
 {% if records %}
 <div class="table-wrapper">
@@ -29,8 +32,8 @@
                 <th>Issue Key</th>
                 <th>Summary</th>
                 <th>Status</th>
-                <th>SDL Approval</th>
-                <th>SDM Approval</th>
+                <th>SDL</th>
+                <th>SDM</th>
                 <th>Validation</th>
                 <th>Meeting</th>
                 <th>Updated</th>
@@ -38,46 +41,42 @@
         </thead>
         <tbody>
             {% for r in records %}
-            <tr class="{{ 'striped' if loop.index is odd else '' }}">
+            <tr>
                 <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
-                <td><small>{{ r.summary[:40] }}{% if r.summary|length > 40 %}…{% endif %}</small></td>
+                <td><small style="color:var(--text-2);">{{ r.summary[:40] }}{% if r.summary|length > 40 %}…{% endif %}</small></td>
+                <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
+                <td><span class="badge badge-{{ r.sdl_approval }}">{{ r.sdl_approval }}</span></td>
+                <td><span class="badge badge-{{ r.sdm_approval }}">{{ r.sdm_approval }}</span></td>
+                <td><small style="max-width:160px; display:inline-block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.validation_result[:40] }}{% if r.validation_result|length > 40 %}…{% endif %}</small></td>
                 <td>
-                    <span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span>
+                    {% if r.meeting_needed %}<span class="badge" style="background:#f5f3ff; color:#6d28d9; border-color:#ddd6fe;">Yes</span>
+                    {% else %}<span class="badge" style="background:var(--surface-2); color:var(--muted); border-color:var(--border);">No</span>{% endif %}
                 </td>
-                <td>
-                    <span class="badge badge-{{ r.sdl_approval }}">{{ r.sdl_approval }}</span>
-                </td>
-                <td>
-                    <span class="badge badge-{{ r.sdm_approval }}">{{ r.sdm_approval }}</span>
-                </td>
-                <td><small>{{ r.validation_result[:40] }}{% if r.validation_result|length > 40 %}…{% endif %}</small></td>
-                <td>
-                    <span class="badge {{ 'kpi-ok' if r.meeting_needed == 0 else 'kpi-warn' }}">
-                        {{ 'No' if r.meeting_needed == 0 else 'Yes' }}
-                    </span>
-                </td>
-                <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
+                <td><small style="color:var(--muted);">{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-</div>
 
 <nav class="pagination" aria-label="Pagination">
     {% if offset > 0 %}
-    <a class="btn btn-outline" href="/dashboard/records?offset={{ [0, offset - limit] | max }}&status={{ status }}&q={{ q }}">« Previous</a>
+    <a class="btn btn-outline btn-sm" href="/dashboard/records?offset={{ [0, offset - limit] | max }}&status={{ status }}&q={{ q }}">« Previous</a>
     {% else %}
-    <span class="btn btn-disabled">« Previous</span>
+    <span class="btn btn-disabled btn-sm">« Previous</span>
     {% endif %}
-    <span class="page-info">Page {{ (offset // limit) + 1 }}</span>
+    <span class="page-info">Page {{ (offset // limit) + 1 }} • {{ total }} total</span>
     {% if offset + limit < total %}
-    <a class="btn btn-outline" href="/dashboard/records?offset={{ offset + limit }}&status={{ status }}&q={{ q }}">Next »</a>
+    <a class="btn btn-outline btn-sm" href="/dashboard/records?offset={{ offset + limit }}&status={{ status }}&q={{ q }}">Next »</a>
     {% else %}
-    <span class="btn btn-disabled">Next »</span>
+    <span class="btn btn-disabled btn-sm">Next »</span>
     {% endif %}
 </nav>
 {% else %}
-<p class="empty-state">No audit records found{% if q or status %} matching your filter{% endif %}.</p>
+<div class="empty-state">
+    <div style="font-size:1.5rem; margin-bottom:0.5rem;">∅</div>
+    <strong>No audit records found</strong>{% if q or status %} matching your filter{% endif %}.<br>
+    <span class="muted">Run the <a href="/dashboard/demo">demo</a> to seed pipeline data, or send a Jira webhook to <code>/webhooks/jira</code>.</span>
+</div>
 {% endif %}
 {% endblock %}

@@ -62,6 +62,8 @@ async def init_db() -> None:
             validation_result TEXT DEFAULT '',
             sdl_approval    TEXT DEFAULT 'pending',
             sdm_approval    TEXT DEFAULT 'pending',
+            sdl_approval_id TEXT DEFAULT '',
+            sdm_approval_id TEXT DEFAULT '',
             rejection_reason TEXT DEFAULT '',
             rejected_by     TEXT DEFAULT '',
             meeting_needed  INTEGER DEFAULT 0,

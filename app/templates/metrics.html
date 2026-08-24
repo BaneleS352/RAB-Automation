@@ -1,17 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Metrics — RAB Automation{% endblock %}
+{% block title %}Metrics — RAB Monitor{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1>Operational Metrics</h1>
-    <a class="btn btn-outline" href="/dashboard/metrics">Refresh</a>
+    <div>
+        <h1>Operational Metrics</h1>
+        <p class="muted" style="margin:0;">Request counts, latency and uptime — same data as <a href="/metrics"><code>/metrics</code></a> JSON.</p>
+    </div>
+    <a class="btn btn-outline btn-sm" href="/dashboard/metrics">↻ Refresh</a>
 </div>
 
 <div class="kpi-grid">
-    <div class="kpi-card"><span class="kpi-value">{{ metrics.uptime_seconds | int }}</span><span class="kpi-label">Uptime (s)</span></div>
-    <div class="kpi-card"><span class="kpi-value">{{ metrics.requests_total }}</span><span class="kpi-label">Requests</span></div>
-    <div class="kpi-card {{ 'kpi-fail' if metrics.requests_failed else '' }}"><span class="kpi-value">{{ metrics.requests_failed }}</span><span class="kpi-label">Failed Requests</span></div>
-    <div class="kpi-card"><span class="kpi-value">{{ metrics.avg_duration_ms }}</span><span class="kpi-label">Avg Duration (ms)</span></div>
+    <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon">◷</span><span class="muted" style="font-size:0.72rem;">time</span></div>
+        <span class="kpi-value">{{ metrics.uptime_seconds | int }}</span><span class="kpi-label">Uptime (s)</span>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon">≡</span><span class="muted" style="font-size:0.72rem;">total</span></div>
+        <span class="kpi-value">{{ metrics.requests_total }}</span><span class="kpi-label">Requests</span>
+    </div>
+    <div class="kpi-card {{ 'kpi-fail' if metrics.requests_failed else '' }}">
+        <div class="kpi-top"><span class="kpi-icon">✕</span><span class="muted" style="font-size:0.72rem;">err</span></div>
+        <span class="kpi-value">{{ metrics.requests_failed }}</span><span class="kpi-label">Failed Requests</span>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon">◈</span><span class="muted" style="font-size:0.72rem;">avg</span></div>
+        <span class="kpi-value">{{ metrics.avg_duration_ms }}</span><span class="kpi-label">Avg Duration (ms)</span>
+    </div>
 </div>
 
-<p class="muted">Same data as the JSON endpoint <a href="/metrics">/metrics</a>.</p>
+<div class="card" style="margin-top:1rem;">
+    <div class="card-body">
+        <p class="muted" style="margin:0;">Metrics are kept in-memory via <code>MetricsMiddleware</code> and reset on restart. For persistent monitoring, scrape <code>/metrics</code> or query <code>webhook_events</code> and <code>rab_records</code>.</p>
+    </div>
+</div>
 {% endblock %}

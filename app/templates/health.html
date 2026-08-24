@@ -1,10 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Overview — RAB Automation{% endblock %}
+{% block title %}Overview — RAB Monitor{% endblock %}
 {% block head_extra %}<meta http-equiv="refresh" content="30">{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1>Overview</h1>
-    <a class="btn btn-outline" href="/dashboard/health">Refresh</a>
+    <div>
+        <h1>Issue Monitor</h1>
+        <p class="muted" style="margin:0;">Real-time Jira RAB pipeline — approvals tracked in Jira, monitored here.</p>
+    </div>
+    <div class="page-header-actions">
+        <a class="btn btn-outline btn-sm" href="/dashboard/demo">Populate demo data</a>
+        <a class="btn btn-ghost btn-sm" href="/dashboard/health">↻ Refresh</a>
+    </div>
 </div>
 
 <h2 class="section-title">Service Health</h2>
@@ -12,77 +18,104 @@
     {% for name, info in services.items() %}
     <div class="health-card {{ 'status-ok' if info.connected else 'status-fail' }}">
         <h2>{{ name }}</h2>
-        <div class="status-badge">{{ 'Connected' if info.connected else 'Disconnected' }}</div>
+        <div class="status-row">
+            <span class="dot {{ 'dot-ok' if info.connected else 'dot-fail' }}"></span>
+            <span class="status-badge">{{ 'Connected' if info.connected else 'Disconnected' }}</span>
+        </div>
         <p class="detail">{{ info.details }}</p>
     </div>
     {% endfor %}
 </div>
 
 <h2 class="section-title">Pipeline Summary</h2>
+<p class="muted" style="margin-top:-0.6rem; margin-bottom:0.7rem;">Populated from audit records — run the <a href="/dashboard/demo">demo</a> to seed data.</p>
 <div class="kpi-grid">
-    <div class="kpi-card"><span class="kpi-value">{{ kpis.total }}</span><span class="kpi-label">Total Tickets</span></div>
-    <div class="kpi-card"><span class="kpi-value">{{ kpis.validated }}</span><span class="kpi-label">Validated</span></div>
-    <div class="kpi-card kpi-warn"><span class="kpi-value">{{ kpis.pending_approval }}</span><span class="kpi-label">Pending Approval</span></div>
-    <div class="kpi-card kpi-ok"><span class="kpi-value">{{ kpis.release_ready }}</span><span class="kpi-label">Release Ready</span></div>
-    <div class="kpi-card kpi-fail"><span class="kpi-value">{{ kpis.validation_failed }}</span><span class="kpi-label">Validation Failed</span></div>
-    <div class="kpi-card kpi-fail"><span class="kpi-value">{{ kpis.rejected }}</span><span class="kpi-label">Rejected</span></div>
+    <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon">◈</span><span class="muted" style="font-size:0.72rem;">all</span></div>
+        <span class="kpi-value">{{ kpis.total }}</span><span class="kpi-label">Total Tickets</span>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-icon">✓</span><span class="muted" style="font-size:0.72rem;">ok</span></div>
+        <span class="kpi-value">{{ kpis.validated }}</span><span class="kpi-label">Validated</span>
+    </div>
+    <div class="kpi-card kpi-warn">
+        <div class="kpi-top"><span class="kpi-icon">◷</span><span class="muted" style="font-size:0.72rem;">wait</span></div>
+        <span class="kpi-value">{{ kpis.pending_approval }}</span><span class="kpi-label">Pending Approval</span>
+    </div>
+    <div class="kpi-card kpi-ok">
+        <div class="kpi-top"><span class="kpi-icon">⬢</span><span class="muted" style="font-size:0.72rem;">ship</span></div>
+        <span class="kpi-value">{{ kpis.release_ready }}</span><span class="kpi-label">Release Ready</span>
+    </div>
+    <div class="kpi-card kpi-fail">
+        <div class="kpi-top"><span class="kpi-icon">✕</span><span class="muted" style="font-size:0.72rem;">fail</span></div>
+        <span class="kpi-value">{{ kpis.validation_failed }}</span><span class="kpi-label">Validation Failed</span>
+    </div>
+    <div class="kpi-card kpi-fail">
+        <div class="kpi-top"><span class="kpi-icon">⊘</span><span class="muted" style="font-size:0.72rem;">no</span></div>
+        <span class="kpi-value">{{ kpis.rejected }}</span><span class="kpi-label">Rejected</span>
+    </div>
 </div>
 
-<h2 class="section-title">Waiting for Approval (over {{ aging_days }} days)</h2>
-{% if aging %}
-<div class="table-wrapper">
-    <table>
-        <thead>
-            <tr>
-                <th>Issue Key</th>
-                <th>Status</th>
-                <th>SDL</th>
-                <th>SDM</th>
-                <th>Updated</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in aging %}
-            <tr>
-                <td><a href="/dashboard/records/{{ r.issue_key }}">{{ r.issue_key }}</a></td>
-                <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
-                <td>{{ r.sdl_approval }}</td>
-                <td>{{ r.sdm_approval }}</td>
-                <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-top:1rem;">
+    <div>
+        <h2 class="section-title">Waiting for Approval <span class="muted" style="font-weight:400; font-size:0.8rem;">(over {{ aging_days }} days)</span></h2>
+        {% if aging %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Issue Key</th>
+                        <th>Status</th>
+                        <th>SDL</th>
+                        <th>SDM</th>
+                        <th>Updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in aging %}
+                    <tr>
+                        <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
+                        <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
+                        <td><span class="badge badge-{{ r.sdl_approval }}">{{ r.sdl_approval }}</span></td>
+                        <td><span class="badge badge-{{ r.sdm_approval }}">{{ r.sdm_approval }}</span></td>
+                        <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No tickets waiting on approval for more than {{ aging_days }} days.</p>
+        {% endif %}
+    </div>
+    <div>
+        <h2 class="section-title">Recent Failures</h2>
+        {% if failures %}
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Issue Key</th>
+                        <th>Status</th>
+                        <th>Detail</th>
+                        <th>Updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in failures %}
+                    <tr>
+                        <td><a href="/dashboard/records/{{ r.issue_key }}">{{ r.issue_key }}</a></td>
+                        <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
+                        <td><small>{{ r.validation_result[:60] }}{% if r.validation_result|length > 60 %}…{% endif %}</small></td>
+                        <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty-state">No recent failures.</p>
+        {% endif %}
+    </div>
 </div>
-{% else %}
-<p class="empty-state">No tickets waiting on approval for more than {{ aging_days }} days.</p>
-{% endif %}
-
-<h2 class="section-title">Recent Failures</h2>
-{% if failures %}
-<div class="table-wrapper">
-    <table>
-        <thead>
-            <tr>
-                <th>Issue Key</th>
-                <th>Status</th>
-                <th>Detail</th>
-                <th>Updated</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for r in failures %}
-            <tr>
-                <td><a href="/dashboard/records/{{ r.issue_key }}">{{ r.issue_key }}</a></td>
-                <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
-                <td><small>{{ r.validation_result[:60] }}{% if r.validation_result|length > 60 %}…{% endif %}</small></td>
-                <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% else %}
-<p class="empty-state">No recent failures.</p>
-{% endif %}
 {% endblock %}

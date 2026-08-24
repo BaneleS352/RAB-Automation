@@ -10,7 +10,10 @@
 <body>
     <nav class="navbar">
         <div class="container">
-            <a href="/" class="brand">RAB Automation</a>
+            <a href="/" class="brand">
+                <span class="brand-icon">RAB</span>
+                <span>RAB Monitor</span>
+            </a>
             <ul class="nav-links">
                 <li><a href="/dashboard/health">Overview</a></li>
                 <li><a href="/dashboard/records">Audit Records</a></li>
@@ -21,8 +24,14 @@
             </ul>
         </div>
     </nav>
-    <main class="container">
+    <main class="container" style="padding-bottom: 2.5rem;">
         {% block content %}{% endblock %}
     </main>
+    <footer style="border-top:1px solid var(--border); padding:1.25rem 0; margin-top:1rem; color:var(--muted); font-size:0.8rem;">
+        <div class="container" style="display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+            <span>RAB Issue Monitor — Jira webhook monitor • approvals in Jira</span>
+            <span>Demo populates pipeline summary • <a href="/dashboard/demo">Try demo</a> • <a href="/health">/health</a></span>
+        </div>
+    </footer>
 </body>
 </html>

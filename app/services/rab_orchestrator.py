@@ -103,7 +103,7 @@ class RabOrchestrator:
                 await self.teams_client.send_card_to_channel(
                     self.teams_client.settings.TEAMS_CHANNEL_ID, card,
                 )
-        except TeamsClientError as e:
+        except Exception as e:
             logger.error("Teams send failed: %s", e)
 
     async def _request_approval(self, issue_key: str, summary: str, step: ApprovalStep) -> None:

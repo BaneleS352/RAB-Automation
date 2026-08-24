@@ -1,18 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Webhooks — RAB Automation{% endblock %}
+{% block title %}Webhooks — RAB Monitor{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1>Webhook Activity</h1>
-    <a class="btn btn-outline" href="/dashboard/webhooks">Refresh</a>
+    <div>
+        <h1>Webhook Activity</h1>
+        <p class="muted" style="margin:0;">Recent Jira deliveries recorded in <code>webhook_events</code> • idempotent by <code>X-Idempotency-Key</code></p>
+    </div>
+    <a class="btn btn-outline btn-sm" href="/dashboard/webhooks">↻ Refresh</a>
 </div>
-<p class="muted">Recent Jira webhook deliveries recorded in <code>webhook_events</code>.</p>
 
 {% if events %}
 <div class="table-wrapper">
     <table>
         <thead>
             <tr>
-                <th>ID</th>
+                <th style="width:50px;">ID</th>
                 <th>Event ID</th>
                 <th>Issue Key</th>
                 <th>Event Type</th>
@@ -23,18 +25,21 @@
         <tbody>
             {% for e in events %}
             <tr>
-                <td><small>{{ e.id }}</small></td>
-                <td><code>{{ e.event_id }}</code></td>
-                <td><a href="/dashboard/records/{{ e.issue_key }}">{{ e.issue_key }}</a></td>
-                <td><small>{{ e.event_type }}</small></td>
+                <td><small style="color:var(--muted);">{{ e.id }}</small></td>
+                <td><code style="font-size:0.78rem;">{{ e.event_id[:16] }}…</code></td>
+                <td><a href="/dashboard/records/{{ e.issue_key }}"><strong>{{ e.issue_key }}</strong></a></td>
+                <td><span class="badge" style="background:var(--surface-2); color:var(--text-2);">{{ e.event_type }}</span></td>
                 <td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td>
-                <td><small>{{ e.created_at[:19] | replace('T', ' ') }}</small></td>
+                <td><small style="color:var(--muted); font-family:'JetBrains Mono', monospace;">{{ e.created_at[:19] | replace('T', ' ') }}</small></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 {% else %}
-<p class="empty-state">No webhook events recorded yet.</p>
+<div class="empty-state">
+    <div style="font-size:1.2rem; margin-bottom:0.4rem;">— No webhook events yet —</div>
+    <span class="muted">Send a Jira webhook to <code>/webhooks/jira</code> or run the <a href="/dashboard/demo">demo</a>. Webhooks from <code>/dashboard/demo</code> also appear here via the orchestrator path.</span>
+</div>
 {% endif %}
 {% endblock %}
