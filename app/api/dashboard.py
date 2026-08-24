@@ -31,6 +31,7 @@ _WEBHOOK_PAGE_SIZE = 50
 
 _HEALTH_CACHE_TTL = 30.0
 _health_cache: dict = {"at": 0.0, "services": None}
+_health_lock = asyncio.Lock()
 
 _test_run_lock = asyncio.Lock()
 _last_test_result: TestRunResult | None = None
@@ -43,14 +44,19 @@ async def _check_connection_status() -> dict:
     if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
         return _health_cache["services"]
 
-    jira_status = await _jira.check_connection()
+    async with _health_lock:
+        # Double-check after acquiring lock
+        now = time.monotonic()
+        if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
+            return _health_cache["services"]
+        jira_status = await _jira.check_connection()
 
-    services = {
-        "jira": {"connected": jira_status.get("connected", False), "details": jira_status.get("details", "Unknown")},
-    }
-    _health_cache["at"] = now
-    _health_cache["services"] = services
-    return services
+        services = {
+            "jira": {"connected": jira_status.get("connected", False), "details": jira_status.get("details", "Unknown")},
+        }
+        _health_cache["at"] = now
+        _health_cache["services"] = services
+        return services
 
 _KNOWN_STATUSES: list[str] = STATUS_CODE_KNOWN_STATUSES
 

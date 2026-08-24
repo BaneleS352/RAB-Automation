@@ -1,5 +1,6 @@
 """Health and root endpoints."""
 
+import asyncio
 import logging
 import time
 
@@ -16,6 +17,7 @@ jira_client = JiraClient()
 
 _HEALTH_CACHE_TTL = 30.0
 _health_cache: dict = {"at": 0.0, "services": None}
+_health_lock = asyncio.Lock()
 
 
 async def _check_services() -> dict:
@@ -25,14 +27,18 @@ async def _check_services() -> dict:
     if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
         return _health_cache["services"]
 
-    jira_status = await jira_client.check_connection()
+    async with _health_lock:
+        now = time.monotonic()
+        if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
+            return _health_cache["services"]
+        jira_status = await jira_client.check_connection()
 
-    services = {
-        "jira": JiraConnectionInfo(connected=jira_status["connected"], details=jira_status["details"]),
-    }
-    _health_cache["at"] = now
-    _health_cache["services"] = services
-    return services
+        services = {
+            "jira": JiraConnectionInfo(connected=jira_status["connected"], details=jira_status["details"]),
+        }
+        _health_cache["at"] = now
+        _health_cache["services"] = services
+        return services
 
 
 @router.get("/health", response_model=HealthResponse, tags=["health"])

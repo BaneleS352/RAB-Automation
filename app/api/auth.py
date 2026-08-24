@@ -1,5 +1,6 @@
 """Optional shared-secret access control for all HTTP routes."""
 
+import hmac
 import logging
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -30,10 +31,10 @@ class AccessTokenMiddleware(BaseHTTPMiddleware):
         if not token:
             return await call_next(request)
 
-        if request.url.path.startswith("/static"):
+        if request.url.path == "/static" or request.url.path.startswith("/static/"):
             return await call_next(request)
 
-        if self._token_from(request) == token:
+        if hmac.compare_digest(self._token_from(request), token):
             response = await call_next(request)
             if request.query_params.get("access_token"):
                 response.set_cookie(
@@ -41,7 +42,9 @@ class AccessTokenMiddleware(BaseHTTPMiddleware):
                     token,
                     max_age=3600,
                     httponly=True,
+                    secure=True,
                     samesite="lax",
+                    path="/",
                 )
             return response
 
@@ -58,5 +61,5 @@ class AccessTokenMiddleware(BaseHTTPMiddleware):
             return api_key.strip()
         cookie = request.cookies.get(_ACCESS_COOKIE)
         if cookie:
-            return cookie
+            return cookie.strip()
         return (request.query_params.get("access_token") or "").strip()

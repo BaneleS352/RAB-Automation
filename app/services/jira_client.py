@@ -1,6 +1,7 @@
 """Jira REST API client for fetching issues, comments, and transitions."""
 
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -10,6 +11,19 @@ from app.config import get_settings
 _DEFAULT_TIMEOUT = httpx.Timeout(30.0)
 
 logger = logging.getLogger(__name__)
+
+_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-\d+$")
+_PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+$")
+
+
+def _validate_issue_key(key: str) -> None:
+    if not _ISSUE_KEY_RE.match(key):
+        raise JiraClientError(f"Invalid issue key: {key}")
+
+
+def _validate_project_key(key: str) -> None:
+    if not _PROJECT_KEY_RE.match(key):
+        raise JiraClientError(f"Invalid project key: {key}")
 
 
 class JiraClientError(Exception):
@@ -78,16 +92,22 @@ class JiraClient:
             raise JiraClientError(f"Network error: {e}") from e
 
     async def get_issue(self, issue_key: str, fields: str | None = None) -> dict[str, Any]:
+        _validate_issue_key(issue_key)
         params = {}
         if fields:
             params["fields"] = fields
         return await self._get(f"/rest/api/3/issue/{issue_key}", params=params)
 
     async def get_issue_comments(self, issue_key: str) -> list[dict]:
+        _validate_issue_key(issue_key)
         data = await self._get(f"/rest/api/3/issue/{issue_key}/comment")
         return data.get("comments", [])
 
     async def add_comment(self, issue_key: str, body: str) -> dict:
+        _validate_issue_key(issue_key)
+        # Truncate to avoid Jira 400 on huge bodies
+        if len(body) > 30000:
+            body = body[:30000] + "… (truncated)"
         adf_body = {
             "type": "doc",
             "version": 1,
@@ -101,14 +121,17 @@ class JiraClient:
         return await self._post(f"/rest/api/3/issue/{issue_key}/comment", {"body": adf_body})
 
     async def update_issue(self, issue_key: str, fields: dict) -> dict:
+        _validate_issue_key(issue_key)
         return await self._put(f"/rest/api/3/issue/{issue_key}", {"fields": fields})
 
     async def transition_issue(self, issue_key: str, transition_id: str) -> dict:
+        _validate_issue_key(issue_key)
         return await self._post(f"/rest/api/3/issue/{issue_key}/transitions", {
             "transition": {"id": transition_id}
         })
 
     async def get_issue_remote_links(self, issue_key: str) -> list[dict]:
+        _validate_issue_key(issue_key)
         data = await self._get(f"/rest/api/3/issue/{issue_key}/remotelink")
         return data if isinstance(data, list) else []
 
@@ -125,10 +148,11 @@ class JiraClient:
 
     async def list_project_issues(self, project_key: str, max_results: int = 100) -> list[dict]:
         """Fetch all issues for a project, handling pagination."""
+        _validate_project_key(project_key)
         all_issues: list[dict] = []
         next_token: str | None = None
         while True:
-            data = await self.search_issues(f"project = {project_key} ORDER BY updated DESC", max_results=max_results, next_page_token=next_token)
+            data = await self.search_issues(f'project = "{project_key}" ORDER BY updated DESC', max_results=max_results, next_page_token=next_token)
             issues = data.get("issues", [])
             all_issues.extend(issues)
             next_token = data.get("nextPageToken")

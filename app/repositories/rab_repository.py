@@ -129,8 +129,12 @@ class RabRepository:
             clauses.append("status = ?")
             params.append(status)
         if q:
-            clauses.append("issue_key LIKE ?")
-            params.append(f"%{q}%")
+            # Escape LIKE wildcards and limit length to prevent DoS/enumeration
+            if len(q) > 100:
+                q = q[:100]
+            escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            clauses.append("issue_key LIKE ? ESCAPE '\\'")
+            params.append(f"%{escaped}%")
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         count_row = await db.execute_fetchall(f"SELECT COUNT(*) FROM rab_records {where}", params)
         total = count_row[0][0] if count_row else 0

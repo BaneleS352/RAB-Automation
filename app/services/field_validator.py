@@ -69,7 +69,11 @@ class FieldValidator:
         if value is None:
             return None
         if isinstance(value, dict):
-            return value.get("displayName") or value.get("value") or value.get("name")
+            raw = value.get("displayName") or value.get("value") or value.get("name")
+            if isinstance(raw, str):
+                raw = raw.strip()
+                return raw or None
+            return str(raw).strip() or None if raw is not None else None
         if isinstance(value, list):
             if not value:
                 return None
@@ -84,17 +88,20 @@ class FieldValidator:
                 if isinstance(part, str) and part.strip():
                     parts.append(part.strip())
             return ", ".join(parts) if parts else None
-        return value if isinstance(value, str) else str(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return str(value).strip() or None
 
     def validate(self, issue_data: dict) -> ValidationResult:
         missing: list[str] = []
         for display_name, field_key in REQUIRED_FIELDS:
             mapped = self.field_map.get(field_key)
             if mapped is None:
-                logger.debug("Skipping '%s' — no field mapping configured", display_name)
+                logger.warning("Skipping '%s' — no field mapping configured", display_name)
                 continue
             value = self.extract_field_value(issue_data, field_key)
-            if not value:
+            if not value or (isinstance(value, str) and not value.strip()):
                 missing.append(display_name)
 
         if missing:
