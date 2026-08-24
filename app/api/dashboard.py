@@ -11,10 +11,8 @@ from fastapi.templating import Jinja2Templates
 
 from app.api.metrics import get_metrics_data
 from app.repositories.rab_repository import RabRepository
-from app.services.azure_devops_client import AzureDevOpsClient
 from app.services.dummy_flow import DummyFlowService
 from app.services.jira_client import JiraClient
-from app.services.teams_client import TeamsClient
 from app.services.test_runner import run_test_suite, TestRunResult
 from app.services.status_codes import KNOWN_STATUSES as STATUS_CODE_KNOWN_STATUSES
 
@@ -27,8 +25,6 @@ templates = Jinja2Templates(directory=str(_templates_dir))
 
 _repo = RabRepository()
 _jira = JiraClient()
-_azure = AzureDevOpsClient()
-_teams = TeamsClient()
 
 _RECORDS_PAGE_SIZE = 25
 _WEBHOOK_PAGE_SIZE = 50
@@ -41,20 +37,16 @@ _last_test_result: TestRunResult | None = None
 
 
 async def _check_connection_status() -> dict:
-    """Connection status for the three integrations, cached to avoid hammering
-    the external APIs on every page load / 30s auto-refresh."""
+    """Connection status for Jira, cached to avoid hammering
+    the external API on every page load / 30s auto-refresh."""
     now = time.monotonic()
     if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
         return _health_cache["services"]
 
     jira_status = await _jira.check_connection()
-    azure_status = await _azure.check_connection()
-    teams_status = await _teams.check_connection()
 
     services = {
         "jira": {"connected": jira_status.get("connected", False), "details": jira_status.get("details", "Unknown")},
-        "azure_devops": {"connected": azure_status.get("connected", False), "details": azure_status.get("details", "Unknown")},
-        "teams": {"connected": teams_status.get("connected", False), "details": teams_status.get("details", "Unknown")},
     }
     _health_cache["at"] = now
     _health_cache["services"] = services

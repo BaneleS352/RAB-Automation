@@ -1,4 +1,4 @@
-"""Tests for the HTML dashboard views."""
+"""Tests for the HTML dashboard views - updated for integration removal."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,20 +11,16 @@ def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _mock_connections(monkeypatch: pytest.MonkeyPatch) -> None:
+def _mock_jira_connection(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.api.dashboard import _health_cache
     from app.services.jira_client import JiraClient
-    from app.services.azure_devops_client import AzureDevOpsClient
-    from app.services.teams_client import TeamsClient
 
     _health_cache["services"] = None
     _health_cache["at"] = 0.0
 
     async def mock_check(self):
-        return {"connected": True, "details": "Mock connection OK"}
+        return {"connected": True, "details": "Jira API is reachable and authenticated."}
     monkeypatch.setattr(JiraClient, "check_connection", mock_check)
-    monkeypatch.setattr(AzureDevOpsClient, "check_connection", mock_check)
-    monkeypatch.setattr(TeamsClient, "check_connection", mock_check)
 
 
 @pytest.fixture()
@@ -43,8 +39,6 @@ class TestDashboardHealth:
         body = client.get("/dashboard/health").text
         assert "health-card" in body
         assert "jira" in body.lower()
-        assert "azure_devops" in body.lower() or "azure" in body.lower()
-        assert "teams" in body.lower()
 
     def test_shows_connected_status(self, client: TestClient) -> None:
         body = client.get("/dashboard/health").text
@@ -80,34 +74,20 @@ class TestDashboardHealthCache:
     def test_connection_checks_are_cached_within_ttl(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         from app.api import dashboard as dashboard_mod
         from app.services.jira_client import JiraClient
-        from app.services.azure_devops_client import AzureDevOpsClient
-        from app.services.teams_client import TeamsClient
 
         dashboard_mod._health_cache["services"] = None
         dashboard_mod._health_cache["at"] = 0.0
-        calls = {"jira": 0, "azure": 0, "teams": 0}
+        calls = {"jira": 0}
 
         async def jira_check(self):
             calls["jira"] += 1
             return {"connected": True, "details": "ok"}
 
-        async def azure_check(self):
-            calls["azure"] += 1
-            return {"connected": True, "details": "ok"}
-
-        async def teams_check(self):
-            calls["teams"] += 1
-            return {"connected": True, "details": "ok"}
-
         monkeypatch.setattr(JiraClient, "check_connection", jira_check)
-        monkeypatch.setattr(AzureDevOpsClient, "check_connection", azure_check)
-        monkeypatch.setattr(TeamsClient, "check_connection", teams_check)
 
         client.get("/dashboard/health")
         client.get("/dashboard/health")
         assert calls["jira"] == 1
-        assert calls["azure"] == 1
-        assert calls["teams"] == 1
 
 
 class TestDashboardOverview:
@@ -142,12 +122,11 @@ class TestDashboardRecordsFiltering:
             "meeting_needed": 0, "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00",
         }
 
-        async def mock_get(self, limit=25, offset=0, status="", q=""):
+        async def mock_get_all(self, limit=25, offset=0, status="", q=""):
             if status == "release_ready":
                 return [row], 1
             return [], 0
-
-        monkeypatch.setattr(RabRepository, "get_all_records_with_count", mock_get)
+        monkeypatch.setattr(RabRepository, "get_all_records_with_count", mock_get_all)
         body = client.get("/dashboard/records?status=release_ready").text
         assert "FILT-1" in body
         assert "1 of 1 records shown" in body
@@ -161,10 +140,10 @@ class TestDashboardRecordsFiltering:
             "meeting_needed": 0, "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00",
         }
 
-        async def mock_get(self, limit=25, offset=0, status="", q=""):
+        async def mock_get_all(self, limit=25, offset=0, status="", q=""):
             return [row] * 25, 100
 
-        monkeypatch.setattr(RabRepository, "get_all_records_with_count", mock_get)
+        monkeypatch.setattr(RabRepository, "get_all_records_with_count", mock_get_all)
         body = client.get("/dashboard/records").text
         assert "Next »" in body
         assert "Page 1" in body
@@ -179,8 +158,8 @@ class TestDashboardRecordDetail:
             return {
                 "id": 1, "issue_key": issue_key, "summary": "Release v2", "status": "meeting_scheduled",
                 "validation_result": "All required fields are present.", "sdl_approval": "approved",
-                "sdm_approval": "approved", "rejection_reason": "", "rejected_by": "", "meeting_needed": 1,
-                "azure_pr_status": "", "azure_pipeline_status": "",
+                "sdm_approval": "approved", "rejection_reason": "", "rejected_by": "",
+                "meeting_needed": 1,
                 "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00",
             }
 

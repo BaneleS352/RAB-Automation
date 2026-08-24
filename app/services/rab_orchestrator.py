@@ -6,7 +6,6 @@ import uuid
 from app.services.status_codes import RabStatus
 from app.repositories.rab_repository import RabRepository
 from app.services.approval_service import ApprovalService, ApprovalStep
-from app.services.azure_devops_client import AzureDevOpsClient, AzureDevOpsClientError
 from app.services.card_templates import (
     approval_request_card,
     developer_notification_card,
@@ -18,7 +17,6 @@ from app.services.card_templates import (
 )
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
-from app.services.teams_client import TeamsClient, TeamsClientError
 
 logger = logging.getLogger(__name__)
 
@@ -30,17 +28,15 @@ class RabOrchestrator:
         self,
         jira_client: JiraClient | None = None,
         field_validator: FieldValidator | None = None,
-        teams_client: TeamsClient | None = None,
+        teams_client=None,
         approval_service: ApprovalService | None = None,
         rab_repo: RabRepository | None = None,
-        azure_client: AzureDevOpsClient | None = None,
     ) -> None:
         self.jira_client = jira_client or JiraClient()
         self.field_validator = field_validator or FieldValidator()
-        self.teams_client = teams_client or TeamsClient()
+        self.teams_client = teams_client
         self.approval_service = approval_service or ApprovalService()
         self.rab_repo = rab_repo or RabRepository()
-        self.azure_client = azure_client or AzureDevOpsClient()
 
     async def handle_jira_event(
         self,
@@ -96,7 +92,7 @@ class RabOrchestrator:
             logger.error("Failed to add comment for %s: %s", issue_key, e)
 
     async def _send_card(self, title: str, card: dict) -> None:
-        if not self.teams_client.is_configured():
+        if not self.teams_client or not self.teams_client.is_configured():
             logger.warning("Teams is not configured — notification '%s' was not delivered", title)
             return
         try:
@@ -195,35 +191,7 @@ class RabOrchestrator:
         await self._send_card(f"Meeting Decision: {issue_key}", card)
         await self._add_comment(issue_key, "RAB Automation: Meeting decision requested.")
 
-    async def _refresh_azure_status(self, issue_key: str) -> None:
-        """Populate azure_pr_status / azure_pipeline_status from the ticket's PR and pipeline links."""
-        if not self.azure_client.is_configured():
-            return
-        issue_data = await self._fetch_issue(issue_key)
-        if not issue_data:
-            return
-        update: dict[str, str] = {}
-        pr_link = self.field_validator.extract_field_value(issue_data, "pr_link")
-        if pr_link:
-            try:
-                pr = await self.azure_client.get_pull_request_by_url(pr_link)
-                update["azure_pr_status"] = str(pr.get("status", "") or "")
-            except AzureDevOpsClientError as e:
-                logger.error("Failed to fetch PR status for %s: %s", issue_key, e)
-        pipeline_link = self.field_validator.extract_field_value(issue_data, "pipeline_link")
-        if pipeline_link:
-            try:
-                run = await self.azure_client.get_pipeline_run_by_url(pipeline_link)
-                status = str(run.get("status", "") or "")
-                result = run.get("result")
-                update["azure_pipeline_status"] = f"{status}:{result}" if result else status
-            except AzureDevOpsClientError as e:
-                logger.error("Failed to fetch pipeline status for %s: %s", issue_key, e)
-        if update:
-            await self.rab_repo.upsert_record(issue_key, update)
-
     async def handle_meeting_callback(self, issue_key: str, needs_meeting: bool) -> str:
-        await self._refresh_azure_status(issue_key)
         await self.rab_repo.upsert_record(issue_key, {
             "meeting_needed": 1 if needs_meeting else 0,
             "status": RabStatus.MEETING_SCHEDULED.value if needs_meeting else RabStatus.RELEASE_READY.value,

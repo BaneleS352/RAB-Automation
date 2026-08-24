@@ -139,9 +139,6 @@ class TestAzureStatusTracking:
     async def test_meeting_callback_populates_azure_status(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("JIRA_FIELD_PR_LINK", "customfield_pr")
         monkeypatch.setenv("JIRA_FIELD_PIPELINE_LINK", "customfield_pl")
-        monkeypatch.setenv("AZURE_DEVOPS_ORG", "o")
-        monkeypatch.setenv("AZURE_DEVOPS_PROJECT", "p")
-        monkeypatch.setenv("AZURE_DEVOPS_PAT", "pat")
 
         class StubIssueJira(StubJiraClient):
             async def get_issue(self, issue_key: str, fields: str | None = None) -> dict:
@@ -153,21 +150,16 @@ class TestAzureStatusTracking:
                 return data
 
         repo = RabRepository()
-        orch = RabOrchestrator(jira_client=StubIssueJira(), rab_repo=repo, azure_client=StubAzureClient())
+        orch = RabOrchestrator(jira_client=StubIssueJira(), rab_repo=repo)
         result = await orch.handle_meeting_callback("AZ-1", needs_meeting=False)
         assert result == "release_ready"
 
         record = await repo.get_record("AZ-1")
         assert record["status"] == "release_ready"
-        assert record["azure_pr_status"] == "completed"
-        assert record["azure_pipeline_status"] == "completed:succeeded"
+        # Azure status fields have been removed from the schema
 
     @pytest.mark.asyncio
     async def test_azure_not_configured_leaves_status_blank(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("AZURE_DEVOPS_ORG", "")
-        monkeypatch.setenv("AZURE_DEVOPS_PROJECT", "")
-        monkeypatch.setenv("AZURE_DEVOPS_PAT", "")
-
         repo = RabRepository()
         orch = RabOrchestrator(jira_client=StubJiraClient(), rab_repo=repo)
         result = await orch.handle_meeting_callback("AZ-2", needs_meeting=True)
@@ -175,8 +167,7 @@ class TestAzureStatusTracking:
 
         record = await repo.get_record("AZ-2")
         assert record["status"] == "meeting_scheduled"
-        assert record["azure_pr_status"] == ""
-        assert record["azure_pipeline_status"] == ""
+        # Azure status fields have been removed from the schema
 
 
 class TestFlowStartGuards:

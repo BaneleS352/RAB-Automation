@@ -14,7 +14,6 @@ ALLOWED_RAB_COLUMNS = frozenset({
     "sdl_approval", "sdm_approval",
     "sdl_approval_id", "sdm_approval_id",
     "rejection_reason", "rejected_by", "meeting_needed",
-    "azure_pr_status", "azure_pipeline_status",
 })
 
 ALLOWED_EVENT_COLUMNS = frozenset({"issue_key", "step", "action", "approver", "reason"})

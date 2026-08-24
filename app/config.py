@@ -15,7 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.services.key_vault_client import KeyVaultClient, KeyVaultClientError
 
 # Secret-bearing settings that may be resolved from Azure Key Vault.
-_SECRET_FIELDS = ("JIRA_API_TOKEN", "AZURE_DEVOPS_PAT", "TEAMS_BOT_CLIENT_SECRET", "ACCESS_TOKEN")
+_SECRET_FIELDS = ("JIRA_API_TOKEN", "ACCESS_TOKEN")
 
 
 class Settings(BaseSettings):
@@ -75,28 +75,7 @@ class Settings(BaseSettings):
     JIRA_TRANSITION_APPROVE: str = ""
     JIRA_TRANSITION_REJECT: str = ""
 
-    # Optional: Azure DevOps (future phases)
-    AZURE_DEVOPS_ORG: str = ""
-    AZURE_DEVOPS_PROJECT: str = ""
-    AZURE_DEVOPS_REPO_ID: str = ""
-    AZURE_DEVOPS_PAT: str | None = None
-    AZURE_DEVOPS_API_VERSION: str = "7.1"
-
-    # Optional: SharePoint (future phases)
-    SHAREPOINT_SITE_ID: str | None = None
-    SHAREPOINT_LIST_ID: str | None = None
-
-    # Optional: Teams (future phases)
-    TEAMS_TENANT_ID: str = ""
-    TEAMS_BOT_APP_ID: str = ""
-    TEAMS_BOT_CLIENT_SECRET: str = ""
-    TEAMS_CHANNEL_ID: str = ""
-
-    # Optional: Teams incoming webhook (no bot registration required).
-    # TEAMS_WEBHOOK_URL is the connector URL; button presses are posted back
-    # to TEAMS_CALLBACK_URL (a publicly reachable URL pointing at /webhooks/teams).
-    TEAMS_WEBHOOK_URL: str = ""
-    TEAMS_CALLBACK_URL: str = ""
+    
 
 
 @lru_cache(maxsize=None)

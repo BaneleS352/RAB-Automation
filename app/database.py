@@ -65,8 +65,6 @@ async def init_db() -> None:
             rejection_reason TEXT DEFAULT '',
             rejected_by     TEXT DEFAULT '',
             meeting_needed  INTEGER DEFAULT 0,
-            azure_pr_status TEXT DEFAULT '',
-            azure_pipeline_status TEXT DEFAULT '',
             created_at      TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
         );

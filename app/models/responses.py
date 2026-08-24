@@ -20,6 +20,8 @@ class HealthResponse(BaseModel):
     azure_devops: JiraConnectionInfo | None = None
     teams: JiraConnectionInfo | None = None
 
+    model_config = {"exclude_defaults": True}
+
 
 class JiraWebhookResponse(BaseModel):
     """Response model for a successfully processed Jira webhook."""

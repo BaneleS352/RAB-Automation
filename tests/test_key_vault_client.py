@@ -55,9 +55,8 @@ class TestKeyVaultConfigWiring:
         _resolve_vault_secrets.cache_clear()
         monkeypatch.setenv("AZURE_VAULT_URL", "https://myvault.vault.azure.net")
         monkeypatch.setenv("JIRA_API_TOKEN", "env-token")
-        monkeypatch.setenv("AZURE_DEVOPS_PAT", "env-pat")
 
-        vault_values = {"JIRA_API_TOKEN": "vault-token", "TEAMS_BOT_CLIENT_SECRET": "vault-secret"}
+        vault_values = {"JIRA_API_TOKEN": "vault-token"}
 
         def fake_get_secret(self, secret_name: str) -> str:
             if secret_name in vault_values:
@@ -68,7 +67,5 @@ class TestKeyVaultConfigWiring:
 
         settings = get_settings()
         assert settings.JIRA_API_TOKEN == "vault-token"
-        assert settings.TEAMS_BOT_CLIENT_SECRET == "vault-secret"
-        # Missing in vault → environment fallback
-        assert settings.AZURE_DEVOPS_PAT == "env-pat"
+        # TEAMS_BOT_CLIENT_SECRET and AZURE_DEVOPS_PAT have been removed from config
         assert settings.AZURE_VAULT_URL == "https://myvault.vault.azure.net"
