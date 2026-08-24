@@ -5,8 +5,7 @@
     <h1>Demo Approval Flow</h1>
     <a class="btn btn-outline" href="/dashboard/demo">Reset</a>
 </div>
-<p class="muted">Runs the real SDL → SDM → meeting workflow against a stub Jira client.
-Every stage is logged and persisted to the audit trail — no external services needed.</p>
+<p class="muted">Runs the real SDL → SDM → meeting workflow against a stub Jira client. Every stage is logged and persisted to the audit trail — no external services needed.</p>
 
 <form method="get" action="/dashboard/demo" class="filter-form">
     <input type="hidden" name="run" value="true">
@@ -30,7 +29,7 @@ Every stage is logged and persisted to the audit trail — no external services 
 </form>
 
 {% if result %}
-<h2 class="section-title">Result: {{ result.status }}</h2>
+<h2 class="section-title" style="color: #e94560;">Result: {{ result.status | upper }}</h2>
 <div class="table-wrapper">
     <table>
         <thead>
@@ -43,12 +42,15 @@ Every stage is logged and persisted to the audit trail — no external services 
             {% for s in result.steps %}
             <tr>
                 <td><code>{{ s.step }}</code></td>
-                <td><small>{{ s.detail }}</small></td>
+                <td><small style="color: {{ 'green' if 'approved' in s.detail.lower() else 'red' if 'rejected' in s.detail.lower() else 'blue' }}">{{ s.detail }}</small></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-<p class="muted"><a href="/dashboard/records/{{ result.issue_key }}">View the audit record for {{ result.issue_key }}</a></p>
+
+<p class="muted"><a href="/dashboard/records/{{ result.issue_key }}" style="color: #1a1a2e; font-weight: 500;">View the audit record for {{ result.issue_key }}</a></p>
+{% else %}
+<p class="empty-state">No flow has been run yet. Use the form above to start the demo approval flow.</p>
 {% endif %}
 {% endblock %}

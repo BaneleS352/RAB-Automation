@@ -231,7 +231,7 @@ class TestDashboardDemo:
             "/dashboard/demo",
             data={"issue_key": "DEMO-UI-1"},
         ).text
-        assert "Result: ok" in body
+        assert "Result: OK" in body
         assert "sdl_approval" in body
         assert "meeting_decision" in body
 

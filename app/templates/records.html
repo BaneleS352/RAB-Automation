@@ -38,7 +38,7 @@
         </thead>
         <tbody>
             {% for r in records %}
-            <tr>
+            <tr class="{{ 'striped' if loop.index is odd else '' }}">
                 <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
                 <td><small>{{ r.summary[:40] }}{% if r.summary|length > 40 %}…{% endif %}</small></td>
                 <td>
@@ -51,12 +51,17 @@
                     <span class="badge badge-{{ r.sdm_approval }}">{{ r.sdm_approval }}</span>
                 </td>
                 <td><small>{{ r.validation_result[:40] }}{% if r.validation_result|length > 40 %}…{% endif %}</small></td>
-                <td>{{ 'Yes' if r.meeting_needed else 'No' }}</td>
+                <td>
+                    <span class="badge {{ 'kpi-ok' if r.meeting_needed == 0 else 'kpi-warn' }}">
+                        {{ 'No' if r.meeting_needed == 0 else 'Yes' }}
+                    </span>
+                </td>
                 <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+</div>
 </div>
 
 <nav class="pagination" aria-label="Pagination">
