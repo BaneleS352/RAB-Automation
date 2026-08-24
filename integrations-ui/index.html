@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#090b0e" />
+    <title>Seventeen — Integrations</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="browser-shell">
+      <header class="browser-bar">
+        <div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="browser-actions" aria-hidden="true">
+          <span class="split-icon"></span><span>‹</span><span>›</span>
+        </div>
+        <div class="address">▣&nbsp;&nbsp; Seventeen Integrations</div>
+        <div class="browser-tools" aria-hidden="true"><span>◉</span><span>⇧</span><span>＋</span><span>▢</span></div>
+      </header>
+
+      <div class="app-shell">
+        <aside class="sidebar" id="sidebar">
+          <div class="brand-row">
+            <a class="brand" href="#">seventeen</a>
+            <button class="plan-badge">Free Plan</button>
+          </div>
+
+          <nav class="nav-groups" aria-label="Main navigation">
+            <section>
+              <p class="nav-label">Summary</p>
+              <a href="#"><span>⌂</span> Dashboard</a>
+              <a class="active" href="#"><span>⌘</span> Integrations</a>
+              <a href="#"><span>▣</span> Payments <em class="notice">3 <b></b></em></a>
+            </section>
+            <section>
+              <p class="nav-label">Team Space</p>
+              <a href="#"><span>◉</span> Tasks <em>1</em></a>
+              <a href="#"><span>⌂</span> Management</a>
+              <a href="#"><span>▱</span> My Storage</a>
+            </section>
+            <section>
+              <p class="nav-label">Security</p>
+              <a href="#"><span>◈</span> My Account</a>
+              <a href="#"><span>⚙</span> Settings</a>
+              <a href="#"><span>◌</span> Support</a>
+            </section>
+          </nav>
+
+          <div class="storage-card">
+            <div class="storage-copy"><strong>80GB / 100GB</strong><span>Your storage is almost full</span></div>
+            <button>Upgrade Plan <span>›</span></button>
+          </div>
+
+          <div class="profile">
+            <div class="avatar">BS</div>
+            <div><strong>Bartosz Sewczuk</strong><span>bart11studio@gmail...</span></div>
+            <button aria-label="Profile options">•••</button>
+          </div>
+        </aside>
+
+        <main class="main">
+          <header class="page-header">
+            <button class="menu-button" id="menuButton" aria-label="Toggle menu">☰</button>
+            <div>
+              <h1>Integrations <span>(54)</span></h1>
+              <p>Everything that business can dream of in one web</p>
+            </div>
+            <div class="connected-summary">
+              <span>Connected integrations</span>
+              <div class="mini-icons"><b class="mi-blue">W</b><b class="mi-red">◆</b><b class="mi-cyan">◆</b><b class="mi-violet">S</b><b class="more">+6</b></div>
+            </div>
+          </header>
+
+          <section class="toolbar">
+            <label class="search"><span>⌕</span><input id="searchInput" type="search" placeholder="Search" /></label>
+            <button class="filter-button" id="filterButton"><span>☷</span> Filters <b id="filterCount"></b></button>
+            <div class="tabs" id="tabs" role="tablist">
+              <button class="active" data-category="All integrations">All integrations</button>
+              <button data-category="Productivity">Productivity</button>
+              <button data-category="E-Commerce">E-Commerce</button>
+              <button data-category="Mail">Mail</button>
+              <button data-category="Documentation">Documentation</button>
+              <button data-category="Jobs">Jobs</button>
+            </div>
+          </section>
+
+          <section class="content-section">
+            <div class="section-title">
+              <h2>Recommended <span id="resultCount">(6)</span></h2>
+              <p>Chosen by&nbsp; <strong>✦ AI</strong>&nbsp; for type of your business</p>
+            </div>
+
+            <div class="card-grid" id="cardGrid"></div>
+            <p class="empty-state" id="emptyState">No integrations match your search.</p>
+          </section>
+
+          <section class="communication">
+            <div class="section-title"><h2>Communication <span>(3)</span></h2><p>All integrations that can help you with communication</p></div>
+            <div class="ghost-grid"><span></span><span></span><span></span></div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
