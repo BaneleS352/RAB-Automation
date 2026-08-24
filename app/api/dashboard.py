@@ -137,6 +137,23 @@ async def dashboard_metrics(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "metrics.html", {"metrics": data})
 
 
+@router.get("/sync", response_class=HTMLResponse)
+async def dashboard_sync_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(request, "sync.html", {"result": None})
+
+
+@router.post("/sync", response_class=HTMLResponse)
+async def dashboard_sync_run(request: Request) -> HTMLResponse:
+    from app.services.jira_sync import JiraSyncService
+
+    service = JiraSyncService()
+    result = await service.sync_all()
+    # Refresh counts after sync
+    counts = await _repo.get_status_counts()
+    total = sum(counts.values())
+    return templates.TemplateResponse(request, "sync.html", {"result": result, "total": total})
+
+
 @router.get("/demo", response_class=HTMLResponse)
 async def dashboard_demo_form(
     request: Request,
@@ -144,17 +161,24 @@ async def dashboard_demo_form(
     summary: str = Query("Demo release ticket"),
     needs_meeting: bool = Query(False),
     reject: bool = Query(False),
+    scenario: str = Query(""),
 ) -> HTMLResponse:
     """Render the demo approval flow form page."""
+    # Seed dataset via GET for convenience: /dashboard/demo?scenario=seed
+    seed_results = None
+    if scenario == "seed":
+        seed_results = []  # populated on POST; GET just shows CTA
     return templates.TemplateResponse(
         request,
         "demo.html",
         {
             "result": None,
+            "seed_results": seed_results,
             "issue_key": issue_key,
             "summary": summary,
             "needs_meeting": needs_meeting,
             "reject": reject,
+            "scenario": scenario,
         },
     )
 
@@ -166,19 +190,54 @@ async def dashboard_demo_run(
     summary: str = Form("Demo release ticket"),
     needs_meeting: bool = Form(False),
     reject: bool = Form(False),
+    scenario: str = Form(""),
 ) -> HTMLResponse:
     """Run the demo approval flow and render the result."""
+    # Seed full dataset
+    if scenario == "seed":
+        results = await DummyFlowService.seed_demo_dataset()
+        return templates.TemplateResponse(
+            request,
+            "demo.html",
+            {
+                "result": None,
+                "seed_results": results,
+                "issue_key": issue_key,
+                "summary": summary,
+                "needs_meeting": needs_meeting,
+                "reject": reject,
+                "scenario": scenario,
+            },
+        )
     service = DummyFlowService(issue_key=issue_key, summary=summary)
-    result = await service.run_rejection() if reject else await service.run_full_approval(needs_meeting=needs_meeting)
+    # Scenario takes precedence over legacy reject/needs_meeting flags
+    if scenario == "pending_sdl":
+        result = await service.run_pending_sdl()
+    elif scenario == "pending_sdm":
+        result = await service.run_pending_sdm()
+    elif scenario == "validation_failed":
+        result = await service.run_validation_failed()
+    elif scenario == "rejected_sdl":
+        result = await service.run_rejection()
+    elif scenario == "rejected_sdm":
+        result = await service.run_sdm_rejection()
+    elif scenario == "aging":
+        result = await service.run_aging_pending(days=3)
+    elif scenario == "full":
+        result = await service.run_full_approval(needs_meeting=needs_meeting)
+    else:
+        result = await service.run_rejection() if reject else await service.run_full_approval(needs_meeting=needs_meeting)
     return templates.TemplateResponse(
         request,
         "demo.html",
         {
             "result": result,
+            "seed_results": None,
             "issue_key": issue_key,
             "summary": summary,
             "needs_meeting": needs_meeting,
             "reject": reject,
+            "scenario": scenario,
         },
     )
 

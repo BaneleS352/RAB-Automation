@@ -46,8 +46,22 @@ class RabOrchestrator:
         logger.info("Orchestrator received event: issue_key=%s, event_type=%s", issue_key, event_type)
 
         if event_type is not None and event_type not in _START_EVENT_TYPES:
-            logger.info("Event %s is not a workflow-starting event for %s — ignoring", event_type, issue_key)
-            return "ignored_non_start_event"
+            logger.info("Event %s is not a workflow-starting event for %s — monitoring only", event_type, issue_key)
+            # Still ensure issue is monitored regardless of event type
+            issue_data = await self._fetch_issue(issue_key)
+            if issue_data:
+                validation = self.field_validator.validate(issue_data)
+                summary = issue_data.get("fields", {}).get("summary", "") or ""
+                await self.rab_repo.upsert_record(issue_key, {
+                    "summary": summary,
+                    "validation_result": validation.detail if not validation.valid else "",
+                    "status": "validated" if validation.valid else "validation_failed",
+                })
+                # Don't overwrite approval state if already tracked
+                existing = await self.rab_repo.get_record(issue_key)
+                if existing and existing.get("status") in ("sdl_requested", "sdm_requested", "sdl_approved", "sdm_approved", "release_ready", "meeting_scheduled", "sdl_rejected", "sdm_rejected"):
+                    await self.rab_repo.upsert_record(issue_key, {"status": existing["status"]})
+            return "monitored"
 
         existing = self.approval_service.get_approval(issue_key)
         if existing is None:

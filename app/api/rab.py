@@ -120,3 +120,19 @@ async def get_summary(aging_days: int = Query(2, ge=1)) -> RabSummary:
         meeting_scheduled=counts.get("meeting_scheduled", 0),
         aging=[RabRecord(**r) for r in aging],
     )
+
+
+@router.post("/sync")
+async def sync_jira(project_key: str | None = None) -> dict:
+    """Sync all Jira issues for project into local monitor (regardless of creation method)."""
+    from app.services.jira_sync import JiraSyncService
+
+    service = JiraSyncService()
+    result = await service.sync_project(project_key) if project_key else await service.sync_all()
+    return {
+        "synced": result.synced,
+        "created": result.created,
+        "updated": result.updated,
+        "failed": result.failed,
+        "errors": result.errors[:5],
+    }

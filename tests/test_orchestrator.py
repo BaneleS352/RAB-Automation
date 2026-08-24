@@ -175,8 +175,9 @@ class TestFlowStartGuards:
     async def test_non_start_event_does_not_start_flow(self) -> None:
         orch = RabOrchestrator(jira_client=StubJiraClient(), rab_repo=RabRepository())
         result = await orch.handle_jira_event("ORCH-G1", "jira:comment_created")
-        assert result == "ignored_non_start_event"
-        assert await RabRepository().get_record("ORCH-G1") is None
+        assert result == "monitored"
+        # Monitored: record is created for visibility even though approval not started
+        assert await RabRepository().get_record("ORCH-G1") is not None
 
     @pytest.mark.asyncio
     async def test_repeat_start_event_with_active_flow_is_ignored(self) -> None:

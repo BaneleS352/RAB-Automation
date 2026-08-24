@@ -126,7 +126,7 @@ class TestWebhookIdempotency:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["result"] == "ignored_non_start_event"
+        assert data["result"] == "monitored"
         assert data["idempotent_replay"] is False
 
     def test_restart_event_with_active_flow_is_ignored(self, client: TestClient) -> None:

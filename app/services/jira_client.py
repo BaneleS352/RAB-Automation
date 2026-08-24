@@ -112,6 +112,32 @@ class JiraClient:
         data = await self._get(f"/rest/api/3/issue/{issue_key}/remotelink")
         return data if isinstance(data, list) else []
 
+    async def search_issues(self, jql: str, max_results: int = 50, next_page_token: str | None = None) -> dict:
+        """Search Jira issues via enhanced search (JQL). Handles pagination via nextPageToken."""
+        params: dict[str, Any] = {"jql": jql, "maxResults": max_results}
+        if next_page_token:
+            params["nextPageToken"] = next_page_token
+        # Try enhanced search POST first, fall back to GET /search
+        try:
+            return await self._post("/rest/api/3/search/jql", {"jql": jql, "maxResults": max_results, **({"nextPageToken": next_page_token} if next_page_token else {})})
+        except JiraClientError:
+            return await self._get("/rest/api/3/search", params=params)
+
+    async def list_project_issues(self, project_key: str, max_results: int = 100) -> list[dict]:
+        """Fetch all issues for a project, handling pagination."""
+        all_issues: list[dict] = []
+        next_token: str | None = None
+        while True:
+            data = await self.search_issues(f"project = {project_key} ORDER BY updated DESC", max_results=max_results, next_page_token=next_token)
+            issues = data.get("issues", [])
+            all_issues.extend(issues)
+            next_token = data.get("nextPageToken")
+            if not next_token or not issues:
+                break
+            if len(all_issues) >= 1000:  # safety cap
+                break
+        return all_issues
+
     async def check_connection(self) -> dict:
         if not self.base_url or not self.email or not self.api_token:
             return {
