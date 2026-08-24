@@ -3,33 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}RAB Automation{% endblock %}</title>
+    <meta name="theme-color" content="#090b0e" />
+    <title>{% block title %}RAB Monitor{% endblock %}</title>
     <link rel="stylesheet" href="/static/css/style.css">
     {% block head_extra %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container">
-            <a href="/" class="brand">
-                <span class="brand-icon" aria-hidden="true"></span>
-                <span>RAB Monitor</span>
-            </a>
-            <ul class="nav-links">
-                <li><a href="/dashboard/health">Overview</a></li>
-                <li><a href="/dashboard/records">Audit Records</a></li>
-                <li><a href="/dashboard/tools">Tools</a></li>
-                <li><a class="nav-btn" href="/dashboard/test">Run Tests</a></li>
-            </ul>
+    <div class="browser-shell">
+        <header class="browser-bar">
+            <div class="traffic-lights" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="browser-actions" aria-hidden="true"><span class="split-icon"></span><span>‹</span><span>›</span></div>
+            <div class="address">▣&nbsp;&nbsp; RAB Monitor — Jira Issue Monitor</div>
+            <div class="browser-tools" aria-hidden="true"><span>◉</span><span>⇧</span><span>＋</span><span>▢</span></div>
+        </header>
+        <div class="app-shell">
+            <aside class="sidebar" id="sidebar">
+                <div class="brand-row">
+                    <a class="brand" href="/">RAB Monitor</a>
+                    <span class="plan-badge">Monitor</span>
+                </div>
+                <nav class="nav-groups" aria-label="Main navigation">
+                    <section>
+                        <p class="nav-label">Summary</p>
+                        <a href="/dashboard/health"><span>⌂</span> Overview</a>
+                        <a href="/dashboard/records"><span>⌘</span> Audit Records</a>
+                        <a href="/dashboard/webhooks"><span>▣</span> Webhooks</a>
+                    </section>
+                    <section>
+                        <p class="nav-label">Team Space</p>
+                        <a href="/dashboard/tools"><span>◈</span> Tools</a>
+                        <a href="/dashboard/demo"><span>◉</span> Demo Lab</a>
+                        <a href="/dashboard/metrics"><span>▱</span> Metrics</a>
+                    </section>
+                    <section>
+                        <p class="nav-label">System</p>
+                        <a href="/health"><span>◈</span> Health API</a>
+                        <a href="/dashboard/test"><span>⚙</span> Run Tests</a>
+                        <a href="/rab/summary"><span>◌</span> Summary API</a>
+                    </section>
+                </nav>
+                <div class="storage-card">
+                    <div class="storage-copy"><strong>Monitor Active</strong><span>Jira webhook • approvals in Jira</span></div>
+                    <button onclick="location.href='/dashboard/tools'">Open Tools <span>›</span></button>
+                </div>
+                <div class="profile">
+                    <div class="avatar">RM</div>
+                    <div><strong>RAB Monitor</strong><span>issue monitor</span></div>
+                    <button aria-label="Profile options">•••</button>
+                </div>
+            </aside>
+            <main class="main">
+                {% block content %}{% endblock %}
+                <footer style="padding:18px 28px; border-top:1px solid var(--line); color:var(--muted); font-size:9px; display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+                    <span>RAB Issue Monitor — Jira webhook monitor • approvals in Jira</span>
+                    <span><a href="/dashboard/tools" style="color:var(--muted);">Tools</a> • <a href="/health" style="color:var(--muted);">/health</a> • <a href="/dashboard/records" style="color:var(--muted);">Audit Records</a></span>
+                </footer>
+            </main>
         </div>
-    </nav>
-    <main class="container" style="padding-bottom: 2.5rem;">
-        {% block content %}{% endblock %}
-    </main>
-    <footer style="border-top:1px solid var(--border); padding:1.25rem 0; margin-top:1rem; color:var(--muted); font-size:0.8rem;">
-        <div class="container" style="display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
-            <span>RAB Issue Monitor — Jira webhook monitor • approvals in Jira</span>
-            <span>Demo populates pipeline summary • <a href="/dashboard/demo">Try demo</a> • <a href="/health">/health</a></span>
-        </div>
-    </footer>
+    </div>
+    <script>
+        // Sidebar toggle for mobile (matches integrations-ui)
+        const btn = document.getElementById('menuButton');
+        const sidebar = document.getElementById('sidebar');
+        if (btn && sidebar) {
+            btn.addEventListener('click', () => sidebar.classList.toggle('open'));
+            document.addEventListener('click', e => {
+                if (window.innerWidth <= 760 && sidebar.classList.contains('open') && !sidebar.contains(e.target) && !e.target.closest('#menuButton')) sidebar.classList.remove('open');
+            });
+        }
+        // Active nav highlighting
+        const path = location.pathname;
+        document.querySelectorAll('.nav-groups a').forEach(a => {
+            if (a.getAttribute('href') === path) a.classList.add('active');
+        });
+    </script>
 </body>
 </html>
