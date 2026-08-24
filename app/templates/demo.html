@@ -39,7 +39,7 @@
                     <tr>
                         <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
                         <td><small>{{ r.steps[0].detail[:60] }}</small></td>
-                        <td><span class="badge" style="background:var(--surface-2); color:var(--text-2);">{{ r.status }}</span></td>
+                        <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
                     </tr>
                 {% endfor %}
                 </tbody>
