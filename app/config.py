@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     # `X-API-Key`, the `?access_token=` query parameter (dashboard), or the
     # `rab_access_token` cookie. Empty (default) leaves the service open.
     ACCESS_TOKEN: str = ""
+    ENABLE_DEMO: bool | None = None
+    ENABLE_TEST_UI: bool | None = None
 
     # Optional: Azure Key Vault for secret resolution (see module docstring).
     AZURE_VAULT_URL: str = ""
@@ -73,6 +75,10 @@ class Settings(BaseSettings):
     JIRA_TRANSITION_REQUEST_APPROVAL: str = ""
     JIRA_TRANSITION_APPROVE: str = ""
     JIRA_TRANSITION_REJECT: str = ""
+
+    def feature_enabled(self, value: bool | None) -> bool:
+        """Enable local-only features by default, require explicit prod opt-in."""
+        return value if value is not None else self.APP_ENV.lower() in {"local", "test", "development"}
 
     
 

@@ -28,6 +28,8 @@ async def lifespan(_application: FastAPI):  # type: ignore[return]
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    if settings.APP_ENV.lower() not in {"local", "test", "development"} and not settings.ACCESS_TOKEN:
+        raise RuntimeError("ACCESS_TOKEN must be configured outside local/development environments")
     setup_logging(settings.LOG_LEVEL)
 
     application = FastAPI(

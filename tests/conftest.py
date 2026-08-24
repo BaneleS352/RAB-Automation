@@ -31,9 +31,20 @@ def _reset_approval_service() -> None:
     orchestrator.approval_service.reset()
     orchestrator.approval_service._store.clear()
     _store.clear()
+    # Keep persisted records isolated as well as in-memory approval state.
+    asyncio.run(_clear_test_records())
     yield
     service.reset()
     _store.clear()
+
+
+async def _clear_test_records() -> None:
+    from app.database import get_db
+    db = await get_db()
+    await db.execute("DELETE FROM rab_records")
+    await db.execute("DELETE FROM approval_events")
+    await db.execute("DELETE FROM webhook_events")
+    await db.commit()
     orchestrator.approval_service.reset()
     orchestrator.approval_service._store.clear()
     _store.clear()

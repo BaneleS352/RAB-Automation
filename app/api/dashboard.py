@@ -5,7 +5,7 @@ import logging
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -35,6 +35,13 @@ _health_lock = asyncio.Lock()
 
 _test_run_lock = asyncio.Lock()
 _last_test_result: TestRunResult | None = None
+
+
+def _require_feature(request: Request, feature: str) -> None:
+    settings = request.app.state.settings
+    enabled = settings.feature_enabled(getattr(settings, feature))
+    if not enabled:
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 async def _check_connection_status() -> dict:
@@ -161,6 +168,7 @@ async def dashboard_sync_run(request: Request) -> HTMLResponse:
 
 @router.get("/tools", response_class=HTMLResponse)
 async def dashboard_tools(request: Request) -> HTMLResponse:
+    _require_feature(request, "ENABLE_DEMO")
     data = get_metrics_data()
     events = await _repo.get_webhook_events(limit=20)
     return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": None, "seed_results": None, "sync_result": None})
@@ -175,6 +183,7 @@ async def dashboard_tools_run(
     scenario: str = Form(""),
     needs_meeting: bool = Form(False),
 ) -> HTMLResponse:
+    _require_feature(request, "ENABLE_DEMO")
     data = get_metrics_data()
     events = await _repo.get_webhook_events(limit=20)
     result = None
@@ -229,6 +238,7 @@ async def dashboard_demo_form(
     scenario: str = Query(""),
 ) -> HTMLResponse:
     """Render the demo approval flow form page."""
+    _require_feature(request, "ENABLE_DEMO")
     # Seed dataset via GET for convenience: /dashboard/demo?scenario=seed
     seed_results = None
     if scenario == "seed":
@@ -258,6 +268,7 @@ async def dashboard_demo_run(
     scenario: str = Form(""),
 ) -> HTMLResponse:
     """Run the demo approval flow and render the result."""
+    _require_feature(request, "ENABLE_DEMO")
     # Seed full dataset
     if scenario == "seed":
         results = await DummyFlowService.seed_demo_dataset()
@@ -310,6 +321,7 @@ async def dashboard_demo_run(
 @router.get("/test", response_class=HTMLResponse)
 async def dashboard_test_form(request: Request) -> HTMLResponse:
     """Render the test results page (last run result or empty state)."""
+    _require_feature(request, "ENABLE_TEST_UI")
     global _last_test_result
     return templates.TemplateResponse(
         request,
@@ -321,6 +333,7 @@ async def dashboard_test_form(request: Request) -> HTMLResponse:
 @router.post("/test", response_class=HTMLResponse)
 async def dashboard_test(request: Request) -> HTMLResponse:
     """Run the pytest suite with token gating and single-flight lock."""
+    _require_feature(request, "ENABLE_TEST_UI")
     global _last_test_result
     from app.config import get_settings
     from app.api.auth import AccessTokenMiddleware

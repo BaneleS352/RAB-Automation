@@ -2,6 +2,7 @@
 
 import logging
 import re
+import asyncio
 from typing import Any
 
 import httpx
@@ -9,6 +10,8 @@ import httpx
 from app.config import get_settings
 
 _DEFAULT_TIMEOUT = httpx.Timeout(30.0)
+_MAX_RETRIES = 3
+_RETRY_BACKOFF = 0.25
 
 logger = logging.getLogger(__name__)
 
@@ -53,43 +56,45 @@ class JiraClient:
         if not self.base_url or not self.email or not self.api_token:
             raise JiraClientError("Jira configuration is incomplete.")
         url = f"{self.base_url.rstrip('/')}{path}"
-        try:
-            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
-                resp = await client.get(url, auth=self._auth(), headers=self._auth_headers(), params=params)
-                resp.raise_for_status()
-                return resp.json()
-        except httpx.HTTPStatusError as e:
-            raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}") from e
-        except httpx.RequestError as e:
-            raise JiraClientError(f"Network error: {e}") from e
+        return await self._request("GET", url, params=params)
 
     async def _put(self, path: str, body: dict) -> dict:
         if not self.base_url or not self.email or not self.api_token:
             raise JiraClientError("Jira configuration is incomplete.")
         url = f"{self.base_url.rstrip('/')}{path}"
-        try:
-            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
-                resp = await client.put(url, auth=self._auth(), headers=self._auth_headers(), json=body)
-                resp.raise_for_status()
-                return resp.json() if resp.content else {}
-        except httpx.HTTPStatusError as e:
-            raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}") from e
-        except httpx.RequestError as e:
-            raise JiraClientError(f"Network error: {e}") from e
+        return await self._request("PUT", url, body=body)
 
     async def _post(self, path: str, body: dict) -> dict:
         if not self.base_url or not self.email or not self.api_token:
             raise JiraClientError("Jira configuration is incomplete.")
         url = f"{self.base_url.rstrip('/')}{path}"
-        try:
-            async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
-                resp = await client.post(url, auth=self._auth(), headers=self._auth_headers(), json=body)
+        return await self._request("POST", url, body=body)
+
+    async def _request(self, method: str, url: str, *, params: dict | None = None, body: dict | None = None) -> dict:
+        """Perform a bounded retry for transient HTTP/network failures."""
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
+                    resp = await client.request(
+                        method, url, auth=self._auth(), headers=self._auth_headers(),
+                        params=params, json=body,
+                    )
+                if resp.status_code == 429 or 500 <= resp.status_code < 600:
+                    if attempt < _MAX_RETRIES:
+                        retry_after = resp.headers.get("Retry-After")
+                        delay = float(retry_after) if retry_after and retry_after.isdigit() else _RETRY_BACKOFF * (2 ** attempt)
+                        await asyncio.sleep(min(delay, 5.0))
+                        continue
                 resp.raise_for_status()
                 return resp.json() if resp.content else {}
-        except httpx.HTTPStatusError as e:
-            raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}") from e
-        except httpx.RequestError as e:
-            raise JiraClientError(f"Network error: {e}") from e
+            except httpx.RequestError as e:
+                if attempt < _MAX_RETRIES:
+                    await asyncio.sleep(_RETRY_BACKOFF * (2 ** attempt))
+                    continue
+                raise JiraClientError(f"Network error: {e}") from e
+            except httpx.HTTPStatusError as e:
+                raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}") from e
+        raise JiraClientError("Jira request failed after retries")
 
     async def get_issue(self, issue_key: str, fields: str | None = None) -> dict[str, Any]:
         _validate_issue_key(issue_key)

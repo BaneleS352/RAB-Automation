@@ -188,7 +188,7 @@ class DummyFlowService:
 
     async def run_aging_pending(self, days: int = 3) -> DummyFlowResult:
         """Create a pending SDL record aged by `days` so it appears in 'Waiting for Approval'."""
-        result = await self.run_pending_sdl()
+        await self.run_pending_sdl()
         # Backdate updated_at so get_aging_records picks it up
         from datetime import datetime, timedelta, timezone
         from app.database import get_db

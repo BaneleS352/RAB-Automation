@@ -5,7 +5,6 @@ integration as the team shifts to a different issue management and
 monitoring platform.
 """
 
-import json
 
 import pytest
 

@@ -55,7 +55,7 @@ rab-automation/
       dummy_flow.py            # Simulated RAB flow with stub Jira client
     templates/                 # Jinja2 HTML templates
     static/css/                # Dashboard styling
-  tests/                       # 18 test files, 163 tests
+      tests/                       # 18 test files, 163 tests (run pytest for current result)
   .env.example
   requirements.txt
   pyproject.toml
