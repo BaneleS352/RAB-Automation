@@ -101,10 +101,10 @@
 </div>
 
 {% if result %}
-<div class="card" style="margin-top:1.25rem; border-color: {% if result.status == 'ok' %}var(--success-border){% elif result.status == 'rejected' %}var(--danger-border){% else %}var(--border){% endif %}; ">
-    <div class="card-header" style="background: {% if result.status == 'ok' %}var(--success-soft){% elif result.status == 'rejected' %}var(--danger-soft){% else %}var(--surface-2){% endif %};">
+<div class="card result-card result-{{ result.status }}">
+    <div class="card-header result-header result-{{ result.status }}">
         <h3 style="display:flex; align-items:center; gap:0.5rem;">
-            <span style="width:10px; height:10px; border-radius:50%; background: {% if result.status == 'ok' %}var(--success){% elif result.status == 'rejected' %}var(--danger){% elif 'pending' in result.status %}var(--warning){% elif 'validation' in result.status %}var(--danger){% else %}var(--muted){% endif %}; display:inline-block;"></span>
+            <span class="result-dot result-{{ result.status }}"></span>
             Result: {{ result.status | upper }}
         </h3>
         <span class="badge" style="background:var(--surface); border-color:var(--border);">{{ result.issue_key }}</span>

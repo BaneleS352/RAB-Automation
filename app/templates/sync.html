@@ -22,8 +22,8 @@
 </div>
 
 {% if result is not none %}
-<div class="card" style="margin-top:1rem; border-color: {% if result.failed %}var(--danger-border){% elif result.created or result.updated %}var(--success-border){% else %}var(--border){% endif %};">
-    <div class="card-header" style="background: {% if result.failed %}var(--danger-soft){% elif result.created or result.updated %}var(--success-soft){% else %}var(--surface-2){% endif %};">
+<div class="card sync-result {% if result.failed %}sync-failed{% elif result.created or result.updated %}sync-success{% endif %}">
+    <div class="card-header sync-result-header {% if result.failed %}sync-failed{% elif result.created or result.updated %}sync-success{% endif %}">
         <h3>Sync result</h3>
         <span class="muted" style="font-size:0.8rem;">{{ result.synced }} processed</span>
     </div>

@@ -22,11 +22,11 @@
     </div>
     {% if kpis.total %}
     <div class="pipeline-rail-track">
-        <div class="pipeline-seg seg-validated" style="width:{{ (kpis.validated / kpis.total * 100) | round(1) }}%;" title="Validated"></div>
-        <div class="pipeline-seg seg-ready" style="width:{{ (kpis.release_ready / kpis.total * 100) | round(1) }}%;" title="Release ready"></div>
-        <div class="pipeline-seg seg-pending" style="width:{{ (kpis.pending_approval / kpis.total * 100) | round(1) }}%;" title="Pending approval"></div>
-        <div class="pipeline-seg seg-failed" style="width:{{ (kpis.validation_failed / kpis.total * 100) | round(1) }}%;" title="Validation failed"></div>
-        <div class="pipeline-seg seg-rejected" style="width:{{ (kpis.rejected / kpis.total * 100) | round(1) }}%;" title="Rejected"></div>
+        <div class="pipeline-seg seg-validated" data-width="{{ (kpis.validated / kpis.total * 100) | round(1) }}" title="Validated"></div>
+        <div class="pipeline-seg seg-ready" data-width="{{ (kpis.release_ready / kpis.total * 100) | round(1) }}" title="Release ready"></div>
+        <div class="pipeline-seg seg-pending" data-width="{{ (kpis.pending_approval / kpis.total * 100) | round(1) }}" title="Pending approval"></div>
+        <div class="pipeline-seg seg-failed" data-width="{{ (kpis.validation_failed / kpis.total * 100) | round(1) }}" title="Validation failed"></div>
+        <div class="pipeline-seg seg-rejected" data-width="{{ (kpis.rejected / kpis.total * 100) | round(1) }}" title="Rejected"></div>
     </div>
     {% else %}
     <div class="pipeline-rail-track"></div>
@@ -146,3 +146,4 @@
     </div>
 </div>
 {% endblock %}
+{% block scripts %}<script>document.querySelectorAll('.pipeline-seg[data-width]').forEach(function (segment) { segment.style.width = segment.dataset.width + '%'; });</script>{% endblock %}
