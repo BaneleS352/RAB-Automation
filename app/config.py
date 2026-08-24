@@ -1,10 +1,9 @@
 """Application settings loaded from environment variables using pydantic-settings.
 
 Optional integration with Azure Key Vault: when AZURE_VAULT_URL is set, secret
-settings (JIRA_API_TOKEN, AZURE_DEVOPS_PAT, TEAMS_BOT_CLIENT_SECRET,
-ACCESS_TOKEN) are resolved from the vault on first access and cached. Values
-fall back to the corresponding environment variable when the vault is
-unreachable or the Azure SDK is not installed.
+settings (JIRA_API_TOKEN, ACCESS_TOKEN) are resolved from the vault on first
+access and cached. Values fall back to the corresponding environment variable
+when the vault is unreachable or the Azure SDK is not installed.
 """
 
 import os

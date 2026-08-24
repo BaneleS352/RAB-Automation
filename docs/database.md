@@ -30,8 +30,8 @@ One row per Jira issue, updated through its lifecycle.
 | `rejection_reason` | TEXT | Reason when rejected |
 | `rejected_by` | TEXT | Who rejected (step name) |
 | `meeting_needed` | INTEGER | `0` or `1` |
-| `azure_pr_status` | TEXT | Reserved for PR checks |
-| `azure_pipeline_status` | TEXT | Reserved for pipeline checks |
+| `sdl_approval_id` | TEXT | SDL approval correlation ID (uuid) |
+| `sdm_approval_id` | TEXT | SDM approval correlation ID (uuid) |
 | `created_at` | TEXT NOT NULL | ISO timestamp |
 | `updated_at` | TEXT NOT NULL | ISO timestamp |
 

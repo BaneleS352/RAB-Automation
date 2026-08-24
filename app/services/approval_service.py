@@ -31,14 +31,23 @@ class ApprovalState:
     sdm_approval_id: str = ""
 
 
-_store: dict[str, ApprovalState] = {}
+_store: dict[str, ApprovalState] = {}  # deprecated global, kept for backward compat
 
 
 class ApprovalService:
     """Manages sequential SDL → SDM approval workflow for a ticket."""
 
+    def __init__(self) -> None:
+        # Instance store for isolation; falls back to global for cross-instance hydration
+        self._store: dict[str, ApprovalState] = {}
+
+    def _get_store(self) -> dict[str, ApprovalState]:
+        # Prefer instance store, but check global for hydration after restart
+        return self._store
+
     def create_approval(self, issue_key: str, summary: str) -> ApprovalState:
-        existing = _store.get(issue_key)
+        store = self._get_store()
+        existing = store.get(issue_key) or _store.get(issue_key)
         if existing is not None:
             logger.info(
                 "Approval already exists for %s — refusing to overwrite (current_step=%s)",
@@ -46,12 +55,13 @@ class ApprovalService:
             )
             return existing
         state = ApprovalState(issue_key=issue_key, summary=summary)
+        self._store[issue_key] = state
         _store[issue_key] = state
         logger.info("Approval created for %s: current_step=%s", issue_key, state.current_step.value)
         return state
 
     def get_approval(self, issue_key: str) -> ApprovalState | None:
-        return _store.get(issue_key)
+        return self._store.get(issue_key) or _store.get(issue_key)
 
     @staticmethod
     def _db_status(value: str) -> ApprovalStatus:
@@ -92,6 +102,7 @@ class ApprovalService:
             sdl_approval_id=record.get("sdl_approval_id") or "",
             sdm_approval_id=record.get("sdm_approval_id") or "",
         )
+        self._store[issue_key] = state
         _store[issue_key] = state
         logger.info(
             "Approval state hydrated for %s: sdl=%s sdm=%s current_step=%s",
@@ -177,7 +188,9 @@ class ApprovalService:
         return bool(state and (state.sdl_status == ApprovalStatus.REJECTED or state.sdm_status == ApprovalStatus.REJECTED))
 
     def reset(self) -> None:
+        self._store.clear()
         _store.clear()
 
     def reset_issue(self, issue_key: str) -> None:
+        self._store.pop(issue_key, None)
         _store.pop(issue_key, None)

@@ -148,10 +148,69 @@ async def dashboard_sync_run(request: Request) -> HTMLResponse:
 
     service = JiraSyncService()
     result = await service.sync_all()
-    # Refresh counts after sync
     counts = await _repo.get_status_counts()
     total = sum(counts.values())
     return templates.TemplateResponse(request, "sync.html", {"result": result, "total": total})
+
+
+@router.get("/tools", response_class=HTMLResponse)
+async def dashboard_tools(request: Request) -> HTMLResponse:
+    data = get_metrics_data()
+    events = await _repo.get_webhook_events(limit=20)
+    return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": None, "seed_results": None, "sync_result": None})
+
+
+@router.post("/tools", response_class=HTMLResponse)
+async def dashboard_tools_run(
+    request: Request,
+    action: str = Form(""),
+    issue_key: str = Form("DEMO-1"),
+    summary: str = Form("Demo release ticket"),
+    scenario: str = Form(""),
+    needs_meeting: bool = Form(False),
+) -> HTMLResponse:
+    data = get_metrics_data()
+    events = await _repo.get_webhook_events(limit=20)
+    result = None
+    seed_results = None
+    sync_result = None
+    # Sync
+    if action == "sync":
+        from app.services.jira_sync import JiraSyncService
+        sync_result = await JiraSyncService().sync_all()
+        events = await _repo.get_webhook_events(limit=20)
+    # Demo seed
+    elif action == "seed":
+        seed_results = await DummyFlowService.seed_demo_dataset()
+        events = await _repo.get_webhook_events(limit=20)
+    # Demo single scenarios
+    elif action in ("pending_sdl", "pending_sdm", "validation_failed", "aging"):
+        svc = DummyFlowService(issue_key=issue_key, summary=summary)
+        if action == "pending_sdl":
+            result = await svc.run_pending_sdl()
+        elif action == "pending_sdm":
+            result = await svc.run_pending_sdm()
+        elif action == "validation_failed":
+            result = await svc.run_validation_failed()
+        elif action == "aging":
+            result = await svc.run_aging_pending(days=3)
+    elif action == "custom":
+        svc = DummyFlowService(issue_key=issue_key, summary=summary)
+        if scenario == "pending_sdl":
+            result = await svc.run_pending_sdl()
+        elif scenario == "pending_sdm":
+            result = await svc.run_pending_sdm()
+        elif scenario == "validation_failed":
+            result = await svc.run_validation_failed()
+        elif scenario == "rejected_sdl":
+            result = await svc.run_rejection()
+        elif scenario == "rejected_sdm":
+            result = await svc.run_sdm_rejection()
+        elif scenario == "aging":
+            result = await svc.run_aging_pending(days=3)
+        else:
+            result = await svc.run_full_approval(needs_meeting=needs_meeting)
+    return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": result, "seed_results": seed_results, "sync_result": sync_result})
 
 
 @router.get("/demo", response_class=HTMLResponse)

@@ -1,22 +1,13 @@
-"""RAB Orchestrator – processes Jira events through the full RAB workflow."""
+"""RAB Orchestrator – processes Jira events through the full RAB workflow (monitor mode)."""
 
 import logging
 import uuid
 
-from app.services.status_codes import RabStatus
 from app.repositories.rab_repository import RabRepository
 from app.services.approval_service import ApprovalService, ApprovalStep
-from app.services.card_templates import (
-    approval_request_card,
-    developer_notification_card,
-    meeting_decision_card,
-    meeting_needed_card,
-    rejection_notification_card,
-    release_ready_card,
-    validation_passed_card,
-)
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
+from app.services.status_codes import RabStatus
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +23,7 @@ class RabOrchestrator:
         approval_service: ApprovalService | None = None,
         rab_repo: RabRepository | None = None,
     ) -> None:
+        # teams_client kept for backward compat but ignored — monitor mode, approvals in Jira
         self.jira_client = jira_client or JiraClient()
         self.field_validator = field_validator or FieldValidator()
         self.teams_client = teams_client
@@ -47,7 +39,6 @@ class RabOrchestrator:
 
         if event_type is not None and event_type not in _START_EVENT_TYPES:
             logger.info("Event %s is not a workflow-starting event for %s — monitoring only", event_type, issue_key)
-            # Still ensure issue is monitored regardless of event type
             issue_data = await self._fetch_issue(issue_key)
             if issue_data:
                 validation = self.field_validator.validate(issue_data)
@@ -57,7 +48,6 @@ class RabOrchestrator:
                     "validation_result": validation.detail if not validation.valid else "",
                     "status": "validated" if validation.valid else "validation_failed",
                 })
-                # Don't overwrite approval state if already tracked
                 existing = await self.rab_repo.get_record(issue_key)
                 if existing and existing.get("status") in ("sdl_requested", "sdm_requested", "sdl_approved", "sdm_approved", "release_ready", "meeting_scheduled", "sdl_rejected", "sdm_rejected"):
                     await self.rab_repo.upsert_record(issue_key, {"status": existing["status"]})
@@ -80,11 +70,11 @@ class RabOrchestrator:
         if not validation.valid:
             msg = f"Validation failed.\n\n{validation.detail}\n\nPlease update the ticket and trigger re-check."
             await self._add_comment(issue_key, f"RAB Automation: {msg}")
-            await self._send_card("Validation Failed", developer_notification_card(issue_key, validation.missing_fields))
+            await self._send_card("Validation Failed")
             return f"validation_failed: {validation.detail}"
 
         await self._add_comment(issue_key, "RAB Automation: Ticket validation passed — starting approvals.")
-        await self._send_card("Validation Passed", validation_passed_card(issue_key))
+        await self._send_card("Validation Passed")
 
         summary = issue_data.get("fields", {}).get("summary", "No summary")
         self.approval_service.create_approval(issue_key, summary)
@@ -105,20 +95,9 @@ class RabOrchestrator:
         except JiraClientError as e:
             logger.error("Failed to add comment for %s: %s", issue_key, e)
 
-    async def _send_card(self, title: str, card: dict) -> None:
-        if not self.teams_client or not self.teams_client.is_configured():
-            logger.warning("Teams is not configured — notification '%s' was not delivered", title)
-            return
-        try:
-            if self.teams_client.is_webhook_configured():
-                await self.teams_client.send_adaptive_card_via_webhook(card)
-                return
-            if self.teams_client.settings.TEAMS_CHANNEL_ID:
-                await self.teams_client.send_card_to_channel(
-                    self.teams_client.settings.TEAMS_CHANNEL_ID, card,
-                )
-        except Exception as e:
-            logger.error("Teams send failed: %s", e)
+    async def _send_card(self, title: str, card: dict | None = None) -> None:
+        # Monitor mode — no Teams delivery; log for audit trail
+        logger.info("Monitor event: %s", title)
 
     async def _request_approval(self, issue_key: str, summary: str, step: ApprovalStep) -> None:
         approval_id = str(uuid.uuid4())
@@ -133,9 +112,8 @@ class RabOrchestrator:
             f"{column}_id": approval_id,
             "status": status_val,
         })
-        card = approval_request_card(issue_key, summary, step.value, approval_id)
         await self._add_comment(issue_key, f"RAB Automation: {step.value} approval requested.")
-        await self._send_card(f"{step.value} Approval: {issue_key}", card)
+        await self._send_card(f"{step.value} Approval: {issue_key}")
 
     async def handle_approval_callback(
         self,
@@ -176,18 +154,12 @@ class RabOrchestrator:
                 issue_key,
                 f"RAB Automation: {rejected_by} rejected.\nReason: {reason or 'No reason provided.'}",
             )
-            await self._send_card(
-                f"Rejected: {issue_key}",
-                rejection_notification_card(issue_key, rejected_by, reason),
-            )
+            await self._send_card(f"Rejected: {issue_key}")
             return {"status": "rejected", "rejected_by": rejected_by, "detail": f"Rejected by {rejected_by}"}
 
         if decision == "approved":
             await self._add_comment(issue_key, f"RAB Automation: {step} approved.")
-            await self._send_card(
-                f"Approved by {step}: {issue_key}",
-                validation_passed_card(issue_key),
-            )
+            await self._send_card(f"Approved by {step}: {issue_key}")
 
             next_step = result.get("next_step")
             if next_step == ApprovalStep.SDM.value:
@@ -201,8 +173,7 @@ class RabOrchestrator:
         return {"status": "error", "detail": result.get("error", "Unknown")}
 
     async def _request_meeting_decision(self, issue_key: str) -> None:
-        card = meeting_decision_card(issue_key)
-        await self._send_card(f"Meeting Decision: {issue_key}", card)
+        await self._send_card(f"Meeting Decision: {issue_key}")
         await self._add_comment(issue_key, "RAB Automation: Meeting decision requested.")
 
     async def handle_meeting_callback(self, issue_key: str, needs_meeting: bool) -> str:
@@ -212,9 +183,9 @@ class RabOrchestrator:
         })
         if needs_meeting:
             await self._add_comment(issue_key, "RAB Automation: Meeting will be scheduled. Resolving attendees from ticket.")
-            await self._send_card("Meeting Needed", meeting_needed_card(issue_key))
+            await self._send_card("Meeting Needed")
             return "meeting_scheduled"
         else:
             await self._add_comment(issue_key, "RAB Automation: No meeting needed — release ticket finalized.")
-            await self._send_card("Release Ready", release_ready_card(issue_key))
+            await self._send_card("Release Ready")
             return "release_ready"
