@@ -13,6 +13,7 @@ ALLOWED_RAB_COLUMNS = frozenset({
     "issue_key", "summary", "status", "validation_result",
     "sdl_approval", "sdm_approval",
     "sdl_approval_id", "sdm_approval_id",
+    "creator", "assignee",
     "rejection_reason", "rejected_by", "meeting_needed",
 })
 
@@ -112,6 +113,26 @@ class RabRepository:
             await db.rollback()
             logger.exception("Unexpected error recording webhook event: %s", e)
             raise
+
+    async def record_field_changes(self, issue_key: str, changelog: dict | None) -> None:
+        if not changelog or not isinstance(changelog.get("items"), list):
+            return
+        db = await get_db()
+        author_data = changelog.get("author") or {}
+        author = author_data.get("displayName") or author_data.get("accountId") or author_data.get("name") or ""
+        for item in changelog["items"]:
+            if not isinstance(item, dict) or not item.get("field"):
+                continue
+            await db.execute(
+                "INSERT INTO field_change_events (issue_key, field, from_value, to_value, author) VALUES (?, ?, ?, ?, ?)",
+                (issue_key, str(item.get("field", "")), str(item.get("fromString") or item.get("from") or ""), str(item.get("toString") or item.get("to") or ""), author),
+            )
+        await db.commit()
+
+    async def get_field_changes(self, issue_key: str) -> list[dict]:
+        db = await get_db()
+        rows = await db.execute_fetchall("SELECT * FROM field_change_events WHERE issue_key = ? ORDER BY created_at, id", (issue_key,))
+        return [dict(r) for r in rows]
 
     async def update_webhook_event_status(self, event_id: str, result: str) -> None:
         db = await get_db()

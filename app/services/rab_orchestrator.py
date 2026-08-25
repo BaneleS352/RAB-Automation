@@ -91,6 +91,13 @@ class RabOrchestrator:
                 return "error_fetching_issue_data"
 
             validation = self.field_validator.validate(issue_data)
+            fields = issue_data.get("fields", {})
+            creator_data = fields.get("creator") or fields.get("reporter") or {}
+            assignee_data = fields.get("assignee") or {}
+            await self.rab_repo.upsert_record(issue_key, {
+                "creator": creator_data.get("displayName") or creator_data.get("accountId") or "",
+                "assignee": assignee_data.get("displayName") or assignee_data.get("accountId") or "",
+            })
             await self.rab_repo.record_validation(issue_key, validation.valid, validation.detail)
             if not validation.valid:
                 msg = f"Validation failed.\n\n{validation.detail}\n\nPlease update the ticket and trigger re-check."

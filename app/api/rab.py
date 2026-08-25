@@ -29,6 +29,8 @@ class RabRecord(BaseModel):
     meeting_needed: int
     created_at: str
     updated_at: str
+    creator: str = ""
+    assignee: str = ""
 
 
 class RabRecordList(BaseModel):
@@ -43,6 +45,16 @@ class ApprovalEvent(BaseModel):
     action: str
     approver: str
     reason: str
+    created_at: str
+
+
+class FieldChangeEvent(BaseModel):
+    id: int
+    issue_key: str
+    field: str
+    from_value: str
+    to_value: str
+    author: str
     created_at: str
 
 
@@ -94,6 +106,12 @@ async def get_record(issue_key: str) -> RabRecord | None:
 async def get_record_events(issue_key: str) -> list[ApprovalEvent]:
     rows = await _repo.get_approval_events(issue_key)
     return [ApprovalEvent(**r) for r in rows]
+
+
+@router.get("/records/{issue_key}/changes", response_model=list[FieldChangeEvent])
+async def get_record_changes(issue_key: str) -> list[FieldChangeEvent]:
+    rows = await _repo.get_field_changes(issue_key)
+    return [FieldChangeEvent(**r) for r in rows]
 
 
 @router.get("/webhook-events", response_model=WebhookEventList)

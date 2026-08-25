@@ -54,7 +54,7 @@
     {% endfor %}
 </div>
 
-<h2 class="section-title">Pipeline Summary</h2>
+<h2 class="section-title">Pipeline Summary <span class="section-kicker">decision-oriented</span></h2>
 <p class="muted" style="margin-top:-0.6rem; margin-bottom:0.7rem;">Populated from audit records — run the <a href="/dashboard/demo">demo</a> to seed data.</p>
 <div class="kpi-grid">
     <div class="kpi-card">
@@ -130,7 +130,7 @@
                 </thead>
                 <tbody>
                     {% for r in failures %}
-                    <tr>
+                    <tr class="table-link-row" data-detail-url="/dashboard/records/{{ r.issue_key }}" tabindex="0" role="link" aria-label="Open {{ r.issue_key }} details">
                         <td><a href="/dashboard/records/{{ r.issue_key }}">{{ r.issue_key }}</a></td>
                         <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
                         <td><small>{{ r.validation_result[:60] }}{% if r.validation_result|length > 60 %}…{% endif %}</small></td>

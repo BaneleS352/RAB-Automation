@@ -42,7 +42,7 @@
         </thead>
         <tbody>
             {% for r in records %}
-            <tr>
+            <tr class="table-link-row" data-detail-url="/dashboard/records/{{ r.issue_key }}" tabindex="0" role="link" aria-label="Open {{ r.issue_key }} details">
                 <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
                 <td><small style="color:var(--text-2);">{{ r.summary[:40] }}{% if r.summary|length > 40 %}…{% endif %}</small></td>
                 <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>

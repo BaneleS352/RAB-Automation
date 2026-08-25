@@ -48,8 +48,13 @@ class JiraSyncService:
         # Validate via field_validator (uses same logic as webhook)
         validation = self.field_validator.validate(issue)
         summary = issue.get("fields", {}).get("summary", "") or ""
+        fields = issue.get("fields", {})
+        creator_data = fields.get("creator") or fields.get("reporter") or {}
+        assignee_data = fields.get("assignee") or {}
         data: dict = {
             "summary": summary,
+            "creator": creator_data.get("displayName") or creator_data.get("accountId") or "",
+            "assignee": assignee_data.get("displayName") or assignee_data.get("accountId") or "",
             "validation_result": validation.detail if not validation.valid else "",
             "status": "validated" if validation.valid else "validation_failed",
         }

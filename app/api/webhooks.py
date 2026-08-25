@@ -73,6 +73,8 @@ async def _process_webhook(
 
     logger.info("Received Jira webhook: issue_key=%s, event=%s, idempotency_key=%s", issue_key, payload.webhookEvent, event_id)
 
+    await rab_repo.record_field_changes(issue_key, payload.model_extra.get("changelog"))
+
     result = await orchestrator.handle_jira_event(
         issue_key=issue_key,
         event_type=payload.webhookEvent,

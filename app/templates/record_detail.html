@@ -25,6 +25,8 @@
                 <span class="detail-label">Summary</span>
                 <span style="font-weight:500;">{{ record.summary or '—' }}</span>
             </div>
+            <div class="detail-item"><span class="detail-label">Ticket Creator</span><span>{{ record.creator or 'Not captured' }}</span></div>
+            <div class="detail-item"><span class="detail-label">Assignee</span><span>{{ record.assignee or 'Unassigned' }}</span></div>
             <div class="detail-item">
                 <span class="detail-label">SDL Approval</span>
                 <span class="badge badge-{{ record.sdl_approval }}">{{ record.sdl_approval }}</span>
@@ -81,6 +83,20 @@
 <p class="empty-state">No approval events recorded for this issue.</p>
 {% endif %}
 
+<div class="detail-columns">
+    <div><h2 class="section-title">People involved</h2><div class="people-card">
+        <div class="person-row"><span class="person-avatar">C</span><div><strong>Ticket creator</strong><small>Not captured in the current audit schema</small></div><span class="badge badge-none">Unavailable</span></div>
+        <div class="person-row"><span class="person-avatar">S</span><div><strong>SDL approver</strong><small>{% set sdl = events | selectattr('step', 'equalto', 'SDL') | list %}{% if sdl %}{{ sdl[-1].approver or 'Decision recorded without a name' }}{% else %}No decision recorded{% endif %}</small></div><span class="badge badge-{{ record.sdl_approval }}">{{ record.sdl_approval }}</span></div>
+        <div class="person-row"><span class="person-avatar">S</span><div><strong>SDM approver</strong><small>{% set sdm = events | selectattr('step', 'equalto', 'SDM') | list %}{% if sdm %}{{ sdm[-1].approver or 'Decision recorded without a name' }}{% else %}No decision recorded{% endif %}</small></div><span class="badge badge-{{ record.sdm_approval }}">{{ record.sdm_approval }}</span></div>
+    </div></div>
+    <div><h2 class="section-title">Major activity</h2><div class="activity-card">
+        <div class="activity-row"><span class="activity-dot"></span><div><strong>Record created</strong><small>{{ record.created_at[:19] | replace('T', ' ') }}</small></div></div>
+        {% for e in events %}<div class="activity-row"><span class="activity-dot activity-{{ e.action }}"></span><div><strong>{{ e.step }} {{ e.action }}</strong><small>{{ e.created_at[:19] | replace('T', ' ') }}{% if e.approver %} · {{ e.approver }}{% endif %}</small></div></div>{% endfor %}
+        {% for e in webhook_events[:5] %}<div class="activity-row"><span class="activity-dot activity-webhook"></span><div><strong>{{ e.event_type or 'Webhook received' }}</strong><small>{{ e.created_at[:19] | replace('T', ' ') }} · {{ e.status }}</small></div></div>{% endfor %}
+        {% for e in field_changes %}<div class="activity-row"><span class="activity-dot activity-change"></span><div><strong>{{ e.field }} changed</strong><small>{{ e.from_value or 'empty' }} → {{ e.to_value or 'empty' }}{% if e.author %} · {{ e.author }}{% endif %}</small></div></div>{% endfor %}
+        <p class="audit-note">Field-level Jira edits and the original creator are not persisted yet. This view reflects webhook deliveries and approval decisions currently stored by RAB.</p>
+    </div></div>
+</div>
 <p class="muted" style="margin-top:1rem;"><a href="/rab/records/{{ record.issue_key }}">View JSON API record →</a> • <a href="/dashboard/records">Back to issues</a></p>
 {% else %}
 <div class="empty-state">

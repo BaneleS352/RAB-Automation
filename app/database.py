@@ -75,6 +75,15 @@ async def _migrate(db: aiosqlite.Connection) -> None:
         await db.execute("ALTER TABLE rab_records ADD COLUMN sdl_approval_id TEXT DEFAULT ''")
     if "sdm_approval_id" not in columns:
         await db.execute("ALTER TABLE rab_records ADD COLUMN sdm_approval_id TEXT DEFAULT ''")
+    if "creator" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN creator TEXT DEFAULT ''")
+    if "assignee" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN assignee TEXT DEFAULT ''")
+    await db.execute("""CREATE TABLE IF NOT EXISTS field_change_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, issue_key TEXT NOT NULL, field TEXT NOT NULL,
+        from_value TEXT DEFAULT '', to_value TEXT DEFAULT '', author TEXT DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )""")
 
 
 async def init_db() -> None:
@@ -116,9 +125,20 @@ async def init_db() -> None:
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS field_change_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issue_key TEXT NOT NULL,
+            field TEXT NOT NULL,
+            from_value TEXT DEFAULT '',
+            to_value TEXT DEFAULT '',
+            author TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
         CREATE INDEX IF NOT EXISTS idx_rab_issue ON rab_records(issue_key);
         CREATE INDEX IF NOT EXISTS idx_approval_issue ON approval_events(issue_key);
         CREATE INDEX IF NOT EXISTS idx_webhook_event_id ON webhook_events(event_id);
+        CREATE INDEX IF NOT EXISTS idx_field_change_issue ON field_change_events(issue_key);
     """)
     await db.commit()
     await _migrate(db)

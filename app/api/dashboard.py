@@ -133,8 +133,10 @@ async def dashboard_record_detail(request: Request, issue_key: str) -> HTMLRespo
             request, "record_detail.html", {"record": None, "events": [], "issue_key": issue_key},
         )
     events = await _repo.get_approval_events(issue_key)
+    field_changes = await _repo.get_field_changes(issue_key)
+    webhook_events = [e for e in await _repo.get_webhook_events(limit=100) if e.get("issue_key") == issue_key]
     return templates.TemplateResponse(
-        request, "record_detail.html", {"record": record, "events": events, "issue_key": issue_key},
+        request, "record_detail.html", {"record": record, "events": events, "field_changes": field_changes, "webhook_events": webhook_events, "issue_key": issue_key},
     )
 
 
