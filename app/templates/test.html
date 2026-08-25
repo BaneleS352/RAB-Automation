@@ -54,7 +54,9 @@
                 {% endfor %}
                 {% if not result.tests %}
                 <tr>
-                    <td colspan="2" class="empty-state">No individual test results captured.</td>
+                    <td colspan="2">
+                        <div class="empty-state">No individual test results captured.</div>
+                    </td>
                 </tr>
                 {% endif %}
             </tbody>

@@ -53,10 +53,21 @@ class JiraSyncService:
             "validation_result": validation.detail if not validation.valid else "",
             "status": "validated" if validation.valid else "validation_failed",
         }
-        # Preserve approval/meeting state if already tracked — don't overwrite with pending
+        # Preserve approval/meeting state if already tracked — don't overwrite status
+        # if the issue is already in an approval/flow state
         if existing:
-            # Only update summary/validation, keep status if already in approval flow
-            if existing.get("status") in ("sdl_requested", "sdm_requested", "sdl_approved", "sdm_approved", "sdl_rejected", "sdm_rejected", "release_ready", "meeting_scheduled"):
+            # Only update summary/validation, keep existing status if already
+            # in an approval/flow state (avoid resetting to validated/validation_failed)
+            if existing.get("status") in (
+                "sdl_requested",
+                "sdm_requested",
+                "sdl_approved",
+                "sdm_approved",
+                "sdl_rejected",
+                "sdm_rejected",
+                "release_ready",
+                "meeting_scheduled",
+            ):
                 data.pop("status", None)
             await self.rab_repo.upsert_record(issue_key, data)
             return "updated"

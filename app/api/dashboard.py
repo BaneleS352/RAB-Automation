@@ -41,7 +41,7 @@ def _require_feature(request: Request, feature: str) -> None:
     settings = request.app.state.settings
     enabled = settings.feature_enabled(getattr(settings, feature))
     if not enabled:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=403, detail="Forbidden")
 
 
 async def _check_connection_status() -> dict:

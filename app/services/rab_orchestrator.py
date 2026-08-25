@@ -5,7 +5,8 @@ import logging
 import uuid
 
 from app.repositories.rab_repository import RabRepository
-from app.services.approval_service import ApprovalService, ApprovalStep
+from app.services.approval_service import ApprovalService, ApprovalStep, ApprovalStatus
+from app.database import get_db
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
 from app.services.status_codes import RabStatus
@@ -71,12 +72,19 @@ class RabOrchestrator:
         lock = await _get_issue_lock(issue_key)
         async with lock:
             existing = self.approval_service.get_approval(issue_key)
-            if existing is None:
-                record = await self.rab_repo.get_record(issue_key)
-                existing = self.approval_service.load_from_record(record) if record else None
             if existing is not None:
+                # Approval already exists in the service store — workflow already started
                 logger.info("Workflow already started for %s — ignoring start event %s", issue_key, event_type)
                 return "already_in_progress"
+            # No approval in store — check the raw DB record
+            record = await self.rab_repo.get_record(issue_key)
+            if record and record.get("sdl_approval") not in ("pending", ""):
+                # DB record indicates an approval was previously started
+                logger.info("Workflow already started for %s — ignoring start event %s", issue_key, event_type)
+                # Hydrate the approval state from the DB record so subsequent logic works
+                existing = self.approval_service.load_from_record(record)
+                return "already_in_progress"
+            # No prior state — proceed with new workflow
 
             issue_data = await self._fetch_issue(issue_key)
             if not issue_data:
