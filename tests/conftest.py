@@ -8,14 +8,14 @@ import uuid
 
 import pytest
 
-from app.database import DB_PATH, init_db, close_db
-from app.api.webhooks import orchestrator
-from app.services.approval_service import ApprovalService
-
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_PATH"] = os.path.join(
     tempfile.gettempdir(), f"rab_pytest_{uuid.uuid4().hex}.db"
 )
+
+from app.database import DB_PATH, init_db, close_db
+from app.api.webhooks import orchestrator
+from app.services.approval_service import ApprovalService
 
 
 logger = logging.getLogger(__name__)
@@ -23,11 +23,13 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(autouse=True)
 def _reset_approval_service() -> None:
-    """Reset approval service state between tests to prevent carryover."""
-    service = ApprovalService()
-    service.reset()
+    """Reset approval service + DB state between tests to prevent carryover."""
+    # Clear DB records (rab_records is the source of the ABC-123 carryover)
+    asyncio.run(_clear_test_records())
+    orchestrator.approval_service.reset()
     yield
-    service.reset()
+    asyncio.run(_clear_test_records())
+    orchestrator.approval_service.reset()
 
 
 async def _clear_test_records() -> None:
@@ -36,9 +38,8 @@ async def _clear_test_records() -> None:
     await db.execute("DELETE FROM rab_records")
     await db.execute("DELETE FROM approval_events")
     await db.execute("DELETE FROM webhook_events")
+    await db.execute("DELETE FROM field_change_events")
     await db.commit()
-    orchestrator.approval_service.reset()
-    orchestrator.approval_service._store.clear()
 
 
 def _init():

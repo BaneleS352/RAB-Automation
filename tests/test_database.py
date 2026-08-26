@@ -52,6 +52,7 @@ class TestDatabase:
             "sdl_approval_id", "sdm_approval_id",
             "rejection_reason", "rejected_by", "meeting_needed",
             "created_at", "updated_at",
+            "creator", "assignee",
         }
         assert col_names == expected
 

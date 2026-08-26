@@ -35,16 +35,10 @@ class ApprovalService:
     """Manages sequential SDL → SDM approval workflow for a ticket."""
 
     def __init__(self) -> None:
-        # Instance store for isolation; falls back to global for cross-instance hydration
         self._store: dict[str, ApprovalState] = {}
 
-    def _get_store(self) -> dict[str, ApprovalState]:
-        # Prefer instance store
-        return self._store
-
     def create_approval(self, issue_key: str, summary: str) -> ApprovalState:
-        store = self._get_store()
-        existing = store.get(issue_key)
+        existing = self._store.get(issue_key)
         if existing is not None:
             logger.info(
                 "Approval already exists for %s — refusing to overwrite (current_step=%s)",
@@ -52,7 +46,7 @@ class ApprovalService:
             )
             return existing
         state = ApprovalState(issue_key=issue_key, summary=summary)
-        store[issue_key] = state
+        self._store[issue_key] = state
         logger.info("Approval created for %s: current_step=%s", issue_key, state.current_step.value)
         return state
 
@@ -98,8 +92,7 @@ class ApprovalService:
             sdl_approval_id=record.get("sdl_approval_id") or "",
             sdm_approval_id=record.get("sdm_approval_id") or "",
         )
-        store = self._get_store()
-        store[issue_key] = state
+        self._store[issue_key] = state
         logger.info(
             "Approval state hydrated for %s: sdl=%s sdm=%s current_step=%s",
             issue_key, sdl.value, sdm.value, current_step.value,

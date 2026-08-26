@@ -5,11 +5,10 @@ import logging
 import uuid
 
 from app.repositories.rab_repository import RabRepository
-from app.services.approval_service import ApprovalService, ApprovalStep, ApprovalStatus
-from app.database import get_db
+from app.services.approval_service import ApprovalService, ApprovalStep
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
-from app.services.status_codes import RabStatus
+from app.services.status_codes import FLOW_STATUSES, RabStatus
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +16,18 @@ _START_EVENT_TYPES = {"jira:issue_created", "jira:issue_updated"}
 
 _issue_locks: dict[str, asyncio.Lock] = {}
 _issue_locks_lock = asyncio.Lock()
+_MAX_ISSUE_LOCKS = 1024
 
 
 async def _get_issue_lock(issue_key: str) -> asyncio.Lock:
     async with _issue_locks_lock:
         lock = _issue_locks.get(issue_key)
         if lock is None:
+            if len(_issue_locks) >= _MAX_ISSUE_LOCKS:
+                for existing_key in list(_issue_locks):
+                    if not _issue_locks[existing_key].locked():
+                        del _issue_locks[existing_key]
+                        break
             lock = asyncio.Lock()
             _issue_locks[issue_key] = lock
         return lock
@@ -65,7 +70,7 @@ class RabOrchestrator:
                         "status": "validated" if validation.valid else "validation_failed",
                     })
                     existing = await self.rab_repo.get_record(issue_key)
-                    if existing and existing.get("status") in ("sdl_requested", "sdm_requested", "sdl_approved", "sdm_approved", "release_ready", "meeting_scheduled", "sdl_rejected", "sdm_rejected"):
+                    if existing and existing.get("status") in FLOW_STATUSES:
                         await self.rab_repo.upsert_record(issue_key, {"status": existing["status"]})
             return "monitored"
 
@@ -78,7 +83,10 @@ class RabOrchestrator:
                 return "already_in_progress"
             # No approval in store — check the raw DB record
             record = await self.rab_repo.get_record(issue_key)
-            if record and record.get("sdl_approval") not in ("pending", ""):
+            if record and (
+                record.get("sdl_approval") in ("requested", "approved", "rejected")
+                or record.get("sdm_approval") in ("requested", "approved", "rejected")
+            ):
                 # DB record indicates an approval was previously started
                 logger.info("Workflow already started for %s — ignoring start event %s", issue_key, event_type)
                 # Hydrate the approval state from the DB record so subsequent logic works

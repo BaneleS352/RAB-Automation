@@ -145,14 +145,23 @@ class JiraClient:
         params: dict[str, Any] = {"jql": jql, "maxResults": max_results}
         if next_page_token:
             params["nextPageToken"] = next_page_token
-        # Try enhanced search POST first, fall back to GET /search
+        # Try enhanced search POST first, fall back to GET /search on 404 only
         try:
             return await self._post("/rest/api/3/search/jql", {"jql": jql, "maxResults": max_results, **({"nextPageToken": next_page_token} if next_page_token else {})})
-        except JiraClientError:
-            return await self._get("/rest/api/3/search", params=params)
+        except JiraClientError as e:
+            if "404" not in str(e) and "HTTP 404" not in str(e):
+                raise
+            # Fallback: legacy GET /search uses startAt for pagination
+            fallback_params: dict[str, Any] = {"jql": jql, "maxResults": max_results}
+            if next_page_token and next_page_token.isdigit():
+                fallback_params["startAt"] = int(next_page_token)
+            elif next_page_token:
+                # nextPageToken from enhanced search is opaque — start from 0 and let caller handle
+                logger.warning("Falling back to GET /search but nextPageToken is opaque (%s) — pagination may be incomplete", next_page_token)
+            return await self._get("/rest/api/3/search", params=fallback_params)
 
     async def list_project_issues(self, project_key: str, max_results: int = 100) -> list[dict]:
-        """Fetch all issues for a project, handling pagination."""
+        """Fetch all issues for a project, handling pagination (enhanced + legacy)."""
         _validate_project_key(project_key)
         all_issues: list[dict] = []
         next_token: str | None = None
@@ -160,11 +169,24 @@ class JiraClient:
             data = await self.search_issues(f'project = "{project_key}" ORDER BY updated DESC', max_results=max_results, next_page_token=next_token)
             issues = data.get("issues", [])
             all_issues.extend(issues)
-            next_token = data.get("nextPageToken")
-            if not next_token or not issues:
-                break
             if len(all_issues) >= 1000:  # safety cap
                 break
+            # Enhanced search uses nextPageToken
+            next_token = data.get("nextPageToken")
+            if next_token:
+                if not issues:
+                    break
+                continue
+            # Legacy GET /search uses startAt/total
+            total = data.get("total")
+            start_at = data.get("startAt")
+            if total is not None and start_at is not None:
+                if start_at + len(issues) >= total or not issues:
+                    break
+                next_token = str(start_at + len(issues))
+                continue
+            # No pagination info — single page
+            break
         return all_issues
 
     async def check_connection(self) -> dict:

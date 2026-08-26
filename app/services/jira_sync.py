@@ -7,6 +7,7 @@ from app.config import get_settings
 from app.repositories.rab_repository import RabRepository
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
+from app.services.status_codes import FLOW_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -63,16 +64,7 @@ class JiraSyncService:
         if existing:
             # Only update summary/validation, keep existing status if already
             # in an approval/flow state (avoid resetting to validated/validation_failed)
-            if existing.get("status") in (
-                "sdl_requested",
-                "sdm_requested",
-                "sdl_approved",
-                "sdm_approved",
-                "sdl_rejected",
-                "sdm_rejected",
-                "release_ready",
-                "meeting_scheduled",
-            ):
+            if existing.get("status") in FLOW_STATUSES:
                 data.pop("status", None)
             await self.rab_repo.upsert_record(issue_key, data)
             return "updated"

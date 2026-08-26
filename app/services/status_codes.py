@@ -53,3 +53,30 @@ def from_record(value: str) -> RabStatus | None:
         return RabStatus(value)
     except ValueError:
         return None
+
+
+# Centralized derived vocabularies — single source of truth for repository/dashboard/orchestrator
+FAILURE_STATUSES: tuple[str, ...] = (
+    RabStatus.VALIDATION_FAILED.value,
+    RabStatus.SDL_REJECTED.value,
+    RabStatus.SDM_REJECTED.value,
+)
+
+FLOW_STATUSES: tuple[str, ...] = (
+    RabStatus.SDL_REQUESTED.value,
+    RabStatus.SDM_REQUESTED.value,
+    RabStatus.SDL_APPROVED.value,
+    RabStatus.SDM_APPROVED.value,
+    RabStatus.SDL_REJECTED.value,
+    RabStatus.SDM_REJECTED.value,
+    RabStatus.RELEASE_READY.value,
+    RabStatus.MEETING_SCHEDULED.value,
+)
+
+PENDING_APPROVAL_WHERE = "sdl_approval = 'requested' OR sdm_approval = 'requested'"
+
+def is_flow_status(status: str | None) -> bool:
+    return status in FLOW_STATUSES
+
+def is_failure_status(status: str | None) -> bool:
+    return status in FAILURE_STATUSES

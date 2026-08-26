@@ -19,8 +19,9 @@ ALLOWED_RAB_COLUMNS = frozenset({
 
 ALLOWED_EVENT_COLUMNS = frozenset({"issue_key", "step", "action", "approver", "reason"})
 _APPROVAL_STATUS_MAP = {"approve": "approved", "reject": "rejected"}
-_PENDING_WHERE = "sdl_approval = 'requested' OR sdm_approval = 'requested'"
-_FAILURE_STATUSES = ("validation_failed", "sdl_rejected", "sdm_rejected")
+# Re-export centralized vocabularies for backward compat; single source is status_codes.py
+from app.services.status_codes import FAILURE_STATUSES as _FAILURE_STATUSES
+from app.services.status_codes import PENDING_APPROVAL_WHERE as _PENDING_WHERE
 
 
 class RabRepository:
@@ -111,6 +112,11 @@ class RabRepository:
             return False
         except Exception as e:
             await db.rollback()
+            # Under WAL + concurrent retries, SQLite can raise "database is locked"
+            # instead of IntegrityError for a duplicate insert. Treat as duplicate.
+            if "database is locked" in str(e).lower():
+                logger.warning("Database locked on webhook %s — treating as duplicate: %s", event_id, e)
+                return False
             logger.exception("Unexpected error recording webhook event: %s", e)
             raise
 
@@ -255,4 +261,6 @@ class RabRepository:
         db = await get_db()
         await db.execute("DELETE FROM rab_records WHERE issue_key = ?", (issue_key,))
         await db.execute("DELETE FROM approval_events WHERE issue_key = ?", (issue_key,))
+        await db.execute("DELETE FROM webhook_events WHERE issue_key = ?", (issue_key,))
+        await db.execute("DELETE FROM field_change_events WHERE issue_key = ?", (issue_key,))
         await db.commit()

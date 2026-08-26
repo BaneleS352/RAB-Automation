@@ -31,10 +31,9 @@ REQUIRED_FIELDS = [
 ]
 
 
-STANDARD_FIELD_KEYS = {
-    "assignee": "assignee",
-    "reporter": "reporter",
-}
+STANDARD_FIELDS: set[str] = {"assignee", "reporter"}
+# Backward compat alias — was previously an identity dict
+STANDARD_FIELD_KEYS = {k: k for k in STANDARD_FIELDS}
 
 
 class FieldValidator:
@@ -47,11 +46,12 @@ class FieldValidator:
     def _build_field_map(self) -> None:
         self.field_map: dict[str, str | None] = {}
         for _, field_key in REQUIRED_FIELDS:
-            if field_key in STANDARD_FIELD_KEYS:
-                self.field_map[field_key] = STANDARD_FIELD_KEYS[field_key]
+            if field_key in STANDARD_FIELDS:
+                self.field_map[field_key] = field_key
             else:
                 custom = getattr(self.settings, f"JIRA_FIELD_{field_key.upper()}", None)
-                self.field_map[field_key] = custom or None
+                # Use explicit None check to allow empty-string config to be distinguished from unset
+                self.field_map[field_key] = custom if custom is not None and custom != "" else None
 
     def extract_field_value(self, issue_data: dict, field_key: str) -> str | None:
         fields = issue_data.get("fields", {})
