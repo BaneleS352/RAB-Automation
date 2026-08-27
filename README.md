@@ -92,7 +92,7 @@ See `.env.example` for the full list of settings, including custom Jira field ma
 ### 3. Run locally
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --port 8001
 ```
 
 The service starts at `http://localhost:8000`. The dashboard is at `http://localhost:8000/dashboard/health`.
