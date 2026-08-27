@@ -1,4 +1,53 @@
+# Environment files
 .env
+.env.local
+
+# Virtual environment
+.venv/
+venv/
+
+# Python cache
 __pycache__/
 *.py[cod]
-rab_automation.db
+*$py.class
+
+# Test/coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Ruff
+.ruff_cache/
+
+# VS Code
+.vscode/
+
+# JetBrains IDEs
+.idea/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Python packaging
+pip-wheel-metadata/
+
+# Temporary output files
+*_output.txt
+results.txt
+
+# Local secrets
+secrets.json
