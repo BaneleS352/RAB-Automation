@@ -1,7 +1,7 @@
 """Tests for the dummy RAB approval flow and demo endpoint."""
 
-import asyncio
 import pytest
+from fastapi.testclient import TestClient
 
 from app.services.dummy_flow import DummyFlowService
 from app.repositories.rab_repository import RabRepository
@@ -59,13 +59,15 @@ class TestDemoEndpoint:
         monkeypatch.setenv("APP_ENV", "test")
 
     @pytest.fixture()
-    def client(self):
+    def client(self) -> TestClient:
         from app.main import create_app
-        from fastapi.testclient import TestClient
         return TestClient(create_app())
 
-    def test_flow_returns_steps(self, client) -> None:
-        resp = client.get("/demo/flow?issue_key=DUMMY-API-1")
+    def test_flow_returns_steps(self, client: TestClient) -> None:
+        resp = client.post(
+            "/demo/flow",
+            data={"issue_key": "DUMMY-API-1"},
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["issue_key"] == "DUMMY-API-1"
@@ -74,8 +76,11 @@ class TestDemoEndpoint:
         assert "validation" in step_names
         assert "meeting_decision" in step_names
 
-    def test_reject_flow(self, client) -> None:
-        resp = client.get("/demo/flow?issue_key=DUMMY-API-R&reject=true")
+    def test_reject_flow(self, client: TestClient) -> None:
+        resp = client.post(
+            "/demo/flow",
+            data={"issue_key": "DUMMY-API-R", "reject": "true"},
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "rejected"

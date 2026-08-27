@@ -48,8 +48,13 @@ class KeyVaultClient:
                 raise KeyVaultClientError("Secret not found in env or Key Vault")
             return value
         except Exception as e:
-            logger.debug("Failed to fetch secret '%s': %s", secret_name, e)
-            raise KeyVaultClientError("Failed to fetch secret from Key Vault") from e
+            # Key Vault is an optional override. A transient outage or missing
+            # local credential must not prevent env-based development startup.
+            logger.warning("Key Vault lookup failed for '%s'; using environment fallback", secret_name)
+            value = os.environ.get(secret_name, "")
+            if value:
+                return value
+            raise KeyVaultClientError("Secret not found in env or Key Vault") from e
 
     def is_configured(self) -> bool:
         return self._use_key_vault

@@ -1,9 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Test Results — RAB Automation{% endblock %}
 {% block content %}
-<h1>Test Suite</h1>
+<div class="page-header">
+    <button class="menu-button" id="menuButton" aria-label="Toggle menu">☰</button>
+    <div>
+        <h1>Test Suite</h1>
+        <p class="muted" style="margin:0;">Run the automated checks and inspect the latest result.</p>
+    </div>
+</div>
 
-{% if result.timed_out %}
+{% if notice %}
+<div class="health-card">
+    <p class="detail">{{ notice }}</p>
+</div>
+{% elif result is none %}
+<div class="health-card">
+    <p class="detail">No test run yet — click "Run Tests" to execute the suite.</p>
+</div>
+{% elif result.timed_out %}
 <div class="health-card status-fail">
     <h2>Timed Out</h2>
     <div class="status-badge">FAIL</div>
@@ -40,7 +54,9 @@
                 {% endfor %}
                 {% if not result.tests %}
                 <tr>
-                    <td colspan="2" class="empty-state">No individual test results captured.</td>
+                    <td colspan="2">
+                        <div class="empty-state">No individual test results captured.</div>
+                    </td>
                 </tr>
                 {% endif %}
             </tbody>
@@ -55,6 +71,8 @@
 {% endif %}
 
 <div class="actions">
-    <a class="btn" href="/dashboard/test">Run Tests Again</a>
+    <form method="post" action="/dashboard/test">
+        <button type="submit" class="btn">Run Tests Again</button>
+    </form>
 </div>
 {% endblock %}

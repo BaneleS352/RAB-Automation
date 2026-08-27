@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Demo — RAB Monitor{% endblock %}
+{% block content %}
+<div class="page-header">
+    <button class="menu-button" id="menuButton" aria-label="Toggle menu">☰</button>
+    <div>
+        <h1>Demo Approval Flow</h1>
+        <p class="muted" style="margin:0;">Seed the monitor with synthetic Jira issues. Each run creates a real audit record that appears in <a href="/dashboard/records">Audit Records</a> and <a href="/dashboard/health">Overview</a> pipeline summary.</p>
+    </div>
+    <a class="btn btn-ghost btn-sm" href="/dashboard/demo">Reset</a>
+</div>
+
+<!-- Seed dataset CTA -->
+<div class="card" style="margin-top:1rem; border-color: var(--primary); background: linear-gradient(135deg, var(--primary-soft) 0%, #fff 60%);">
+    <div class="card-body" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+        <div>
+            <strong style="font-size:0.95rem;">Populate the whole pipeline</strong>
+            <p class="muted" style="margin:0.2rem 0 0;">Creates 8 issues covering every status — pending SDL/SDM, validation failed, rejected, release ready, meeting scheduled, aging. One click to fill Overview KPIs.</p>
+        </div>
+        <form method="post" action="/dashboard/demo" style="margin:0;">
+            <input type="hidden" name="scenario" value="seed">
+            <input type="hidden" name="issue_key" value="DEMO-SEED">
+            <button type="submit" class="btn btn-primary">Seed demo dataset →</button>
+        </form>
+    </div>
+</div>
+
+{% if seed_results %}
+<div class="card" style="margin-top:1rem;">
+    <div class="card-header">
+        <h3>Seeded {{ seed_results|length }} issues</h3>
+        <a class="btn btn-outline btn-sm" href="/dashboard/health">View pipeline summary</a>
+    </div>
+    <div class="card-body" style="padding:0;">
+        <div class="table-wrapper" style="border:none; box-shadow:none;">
+            <table>
+                <thead><tr><th>Issue</th><th>Summary</th><th>Status</th></tr></thead>
+                <tbody>
+                {% for r in seed_results %}
+                    <tr>
+                        <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
+                        <td><small>{{ r.steps[0].detail[:60] }}</small></td>
+                        <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div style="padding:0.9rem 1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <a class="btn btn-primary btn-sm" href="/dashboard/health">See pipeline KPIs</a>
+            <a class="btn btn-outline btn-sm" href="/dashboard/records">Browse issues</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top:1rem;">
+    <div class="card-header">
+        <h3>Run single scenario</h3>
+        <span class="muted" style="font-size:0.8rem;">SDL → SDM → meeting</span>
+    </div>
+    <div class="card-body">
+        <form method="post" action="/dashboard/demo" style="display:flex; flex-wrap:wrap; gap:0.9rem; align-items:flex-end;">
+            <label class="field" style="flex:1; min-width:160px;">
+                <span class="detail-label">Issue Key</span>
+                <input type="text" name="issue_key" value="{{ issue_key }}" required pattern="[A-Z]+-[0-9]+">
+            </label>
+            <label class="field" style="flex:2; min-width:220px;">
+                <span class="detail-label">Summary</span>
+                <input type="text" name="summary" value="{{ summary }}" style="width:100%;">
+            </label>
+            <label class="field" style="min-width:200px;">
+                <span class="detail-label">Scenario</span>
+                <select name="scenario" style="padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius); font-size:0.875rem; background:var(--surface);">
+                    <option value="" {% if not scenario %}selected{% endif %}>Full approval (default)</option>
+                    <option value="pending_sdl" {% if scenario=='pending_sdl' %}selected{% endif %}>Pending at SDL</option>
+                    <option value="pending_sdm" {% if scenario=='pending_sdm' %}selected{% endif %}>Pending at SDM</option>
+                    <option value="validation_failed" {% if scenario=='validation_failed' %}selected{% endif %}>Validation failed</option>
+                    <option value="rejected_sdl" {% if scenario=='rejected_sdl' %}selected{% endif %}>Rejected by SDL</option>
+                    <option value="rejected_sdm" {% if scenario=='rejected_sdm' %}selected{% endif %}>Rejected by SDM</option>
+                    <option value="aging" {% if scenario=='aging' %}selected{% endif %}>Aging — pending 3 days</option>
+                </select>
+            </label>
+            <label class="field checkbox-field" title="Only for full approval">
+                <input type="checkbox" name="needs_meeting" value="true" {% if needs_meeting %}checked{% endif %}>
+                <span>Meeting needed</span>
+            </label>
+            <!-- legacy reject checkbox kept hidden for backward compat but scenario is preferred -->
+            <input type="hidden" name="reject" value="{% if reject %}true{% endif %}">
+            <button type="submit" class="btn btn-primary">Run Flow →</button>
+        </form>
+        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <span class="muted" style="font-size:0.8rem;">Quick:</span>
+            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDL"><input type="hidden" name="scenario" value="pending_sdl"><button class="btn btn-outline btn-sm">Pending SDL</button></form>
+            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDM"><input type="hidden" name="scenario" value="pending_sdm"><button class="btn btn-outline btn-sm">Pending SDM</button></form>
+            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-FAIL"><input type="hidden" name="scenario" value="validation_failed"><button class="btn btn-outline btn-sm">Validation failed</button></form>
+            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-AGING"><input type="hidden" name="scenario" value="aging"><button class="btn btn-outline btn-sm">Aging</button></form>
+        </div>
+        <p class="muted" style="margin-top:0.75rem;">No external services needed — uses a stub Jira client. Every scenario persists to the audit trail.</p>
+    </div>
+</div>
+
+{% if result %}
+<div class="card result-card result-{{ result.status }}">
+    <div class="card-header result-header result-{{ result.status }}">
+        <h3 style="display:flex; align-items:center; gap:0.5rem;">
+            <span class="result-dot result-{{ result.status }}"></span>
+            Result: {{ result.status | upper }}
+        </h3>
+        <span class="badge" style="background:var(--surface); border-color:var(--border);">{{ result.issue_key }}</span>
+    </div>
+    <div class="card-body">
+        <div class="steps" style="margin-bottom:0.75rem;">
+            {% for s in result.steps %}
+            <span class="step done" title="{{ s.detail }}">{{ s.step }}</span>
+            {% if not loop.last %}<span style="color:var(--muted-2);">→</span>{% endif %}
+            {% endfor %}
+        </div>
+        <div class="table-wrapper" style="box-shadow:none; border-radius:var(--radius);">
+            <table>
+                <thead><tr><th>Step</th><th>Outcome</th></tr></thead>
+                <tbody>
+                    {% for s in result.steps %}
+                    <tr><td><code>{{ s.step }}</code></td><td><small>{{ s.detail }}</small></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div style="margin-top:0.9rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <a class="btn btn-primary btn-sm" href="/dashboard/records/{{ result.issue_key }}">View audit record →</a>
+            <a class="btn btn-outline btn-sm" href="/dashboard/health">See pipeline summary</a>
+            <a class="btn btn-ghost btn-sm" href="/dashboard/records">All issues</a>
+        </div>
+    </div>
+</div>
+{% elif not seed_results %}
+<div class="empty-state" style="margin-top:1rem;">
+    <div style="font-size:1.2rem; margin-bottom:0.4rem;">▶ Run the flow to seed data</div>
+    <span class="muted">Each run persists to the audit trail and updates the <a href="/dashboard/health">pipeline summary</a> KPIs.</span>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,6 +1,20 @@
-"""Application settings loaded from environment variables using pydantic-settings."""
+"""Application settings loaded from environment variables using pydantic-settings.
+
+Optional integration with Azure Key Vault: when AZURE_VAULT_URL is set, secret
+settings (JIRA_API_TOKEN, ACCESS_TOKEN) are resolved from the vault on first
+access and cached. Values fall back to the corresponding environment variable
+when the vault is unreachable or the Azure SDK is not installed.
+"""
+
+import os
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.services.key_vault_client import KeyVaultClient, KeyVaultClientError
+
+# Secret-bearing settings that may be resolved from Azure Key Vault.
+_SECRET_FIELDS = ("JIRA_API_TOKEN", "ACCESS_TOKEN")
 
 
 class Settings(BaseSettings):
@@ -21,6 +35,17 @@ class Settings(BaseSettings):
     APP_ENV: str = "local"
     LOG_LEVEL: str = "INFO"
     DATABASE_PATH: str = ""
+
+    # Optional shared secret protecting all HTTP endpoints. When set, every
+    # request except /static must present it via `Authorization: Bearer`,
+    # `X-API-Key`, the `?access_token=` query parameter (dashboard), or the
+    # `rab_access_token` cookie. Empty (default) leaves the service open.
+    ACCESS_TOKEN: str = ""
+    ENABLE_DEMO: bool | None = None
+    ENABLE_TEST_UI: bool | None = None
+
+    # Optional: Azure Key Vault for secret resolution (see module docstring).
+    AZURE_VAULT_URL: str = ""
 
     # Required: Jira webhook endpoint
     JIRA_WEBHOOK_URL: str
@@ -51,24 +76,33 @@ class Settings(BaseSettings):
     JIRA_TRANSITION_APPROVE: str = ""
     JIRA_TRANSITION_REJECT: str = ""
 
-    # Optional: Azure DevOps (future phases)
-    AZURE_DEVOPS_ORG: str = ""
-    AZURE_DEVOPS_PROJECT: str = ""
-    AZURE_DEVOPS_REPO_ID: str = ""
-    AZURE_DEVOPS_PAT: str | None = None
-    AZURE_DEVOPS_API_VERSION: str = "7.1"
+    def feature_enabled(self, value: bool | None) -> bool:
+        """Enable local-only features by default, require explicit prod opt-in."""
+        return value if value is not None else self.APP_ENV.lower() in {"local", "test", "development"}
 
-    # Optional: SharePoint (future phases)
-    SHAREPOINT_SITE_ID: str | None = None
-    SHAREPOINT_LIST_ID: str | None = None
+    
 
-    # Optional: Teams (future phases)
-    TEAMS_TENANT_ID: str = ""
-    TEAMS_BOT_APP_ID: str = ""
-    TEAMS_BOT_CLIENT_SECRET: str = ""
-    TEAMS_CHANNEL_ID: str = ""
+
+@lru_cache(maxsize=None)
+def _resolve_vault_secrets(vault_url: str) -> tuple[tuple[str, str], ...]:
+    """Resolve secret settings from Key Vault (cached; empty-return on fallback)."""
+    kv = KeyVaultClient(vault_url=vault_url)
+    resolved: list[tuple[str, str]] = []
+    for field in _SECRET_FIELDS:
+        try:
+            value = kv.get_secret(field)
+        except KeyVaultClientError:
+            value = os.environ.get(field, "")
+        if value:
+            resolved.append((field, value))
+    return tuple(resolved)
 
 
 def get_settings() -> Settings:
-    """Return a Settings instance."""
-    return Settings()
+    """Return a Settings instance, overlaying env values with vault secrets when configured."""
+    settings = Settings()
+    if settings.AZURE_VAULT_URL:
+        overrides = dict(_resolve_vault_secrets(settings.AZURE_VAULT_URL))
+        if overrides:
+            settings = settings.model_copy(update=overrides)
+    return settings

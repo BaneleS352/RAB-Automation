@@ -49,9 +49,10 @@ class TestDatabase:
         expected = {
             "id", "issue_key", "summary", "status",
             "validation_result", "sdl_approval", "sdm_approval",
+            "sdl_approval_id", "sdm_approval_id",
             "rejection_reason", "rejected_by", "meeting_needed",
-            "azure_pr_status", "azure_pipeline_status",
             "created_at", "updated_at",
+            "creator", "assignee",
         }
         assert col_names == expected
 

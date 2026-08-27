@@ -2,7 +2,6 @@
 
 import asyncio
 import httpx
-import json
 
 BASE = "http://localhost:8012"
 

@@ -3,22 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}RAB Automation{% endblock %}</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <meta name="theme-color" content="#090b0e" />
+    <title>{% block title %}RAB Monitor{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=20260825">
+    {% block head_extra %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar">
-        <div class="container">
-            <a href="/" class="brand">RAB Automation</a>
-            <ul class="nav-links">
-                <li><a href="/dashboard/health">Health</a></li>
-                <li><a href="/dashboard/records">Audit Records</a></li>
-                <li><a class="nav-btn" href="/dashboard/test">Run Tests</a></li>
-            </ul>
+    <div class="browser-shell">
+        <div class="app-shell">
+            <aside class="sidebar" id="sidebar">
+                <div class="brand-row">
+                    <a class="brand" href="/">RAB Monitor</a>
+                    <span class="plan-badge">Monitor</span>
+                </div>
+                <nav class="nav-groups" aria-label="Main navigation">
+                    <section>
+                        <p class="nav-label">Summary</p>
+                        <a href="/dashboard/health"><span>⌂</span> Overview</a>
+                        <a href="/dashboard/records"><span>⌘</span> Audit Records</a>
+                        <a href="/dashboard/webhooks"><span>▣</span> Webhooks</a>
+                    </section>
+                    <section>
+                        <p class="nav-label">Team Space</p>
+                        <a href="/dashboard/tools"><span>◈</span> Tools</a>
+                        <a href="/dashboard/demo"><span>◉</span> Demo Lab</a>
+                        <a href="/dashboard/metrics"><span>▱</span> Metrics</a>
+                    </section>
+                    <section>
+                        <p class="nav-label">System</p>
+                        <a href="/health"><span>◈</span> Health API</a>
+                        <a href="/dashboard/test"><span>⚙</span> Run Tests</a>
+                        <a href="/rab/summary"><span>◌</span> Summary API</a>
+                    </section>
+                </nav>
+                <div class="storage-card">
+                    <div class="storage-copy"><strong>Monitor Active</strong><span>Jira webhook • approvals in Jira</span></div>
+                    <button onclick="location.href='/dashboard/tools'">Open Tools <span>›</span></button>
+                </div>
+                <div class="profile">
+                    <div class="avatar">RM</div>
+                    <div><strong>RAB Monitor</strong><span>issue monitor</span></div>
+                    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to light mode" title="Switch theme">☼</button>
+                </div>
+            </aside>
+            <main class="main">
+                {% block content %}{% endblock %}
+                <footer style="padding:18px 28px; border-top:1px solid var(--line); color:var(--muted); font-size:9px; display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+                    <span>RAB Issue Monitor — Jira webhook monitor • approvals in Jira</span>
+                    <span><a href="/dashboard/tools" style="color:var(--muted);">Tools</a> • <a href="/health" style="color:var(--muted);">/health</a> • <a href="/dashboard/records" style="color:var(--muted);">Audit Records</a></span>
+                </footer>
+            </main>
         </div>
-    </nav>
-    <main class="container">
-        {% block content %}{% endblock %}
-    </main>
+    </div>
+    <script>
+        // Sidebar toggle for mobile (matches integrations-ui)
+        const btn = document.getElementById('menuButton');
+        const sidebar = document.getElementById('sidebar');
+        if (btn && sidebar) {
+            btn.addEventListener('click', () => sidebar.classList.toggle('open'));
+            document.addEventListener('click', e => {
+                if (window.innerWidth <= 760 && sidebar.classList.contains('open') && !sidebar.contains(e.target) && !e.target.closest('#menuButton')) sidebar.classList.remove('open');
+            });
+        }
+        // Active nav highlighting
+        const path = location.pathname;
+        document.querySelectorAll('.nav-groups a').forEach(a => {
+            if (a.getAttribute('href') === path) a.classList.add('active');
+        });
+        document.querySelectorAll('.table-link-row[data-detail-url]').forEach(row => {
+            row.addEventListener('click', event => {
+                if (event.target.closest('a, button, input, select, textarea')) return;
+                window.location.href = row.dataset.detailUrl;
+            });
+            row.addEventListener('keydown', event => {
+                if ((event.key === 'Enter' || event.key === ' ') && document.activeElement === row) {
+                    event.preventDefault();
+                    window.location.href = row.dataset.detailUrl;
+                }
+            });
+        });
+        const themeToggle = document.getElementById('themeToggle');
+        const savedTheme = localStorage.getItem('rab-theme');
+        if (savedTheme === 'light') document.body.classList.add('light');
+        function updateThemeButton() {
+            const light = document.body.classList.contains('light');
+            themeToggle.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
+            themeToggle.textContent = light ? '☾' : '☼';
+        }
+        if (themeToggle) {
+            updateThemeButton();
+            themeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('light');
+                localStorage.setItem('rab-theme', document.body.classList.contains('light') ? 'light' : 'dark');
+                updateThemeButton();
+            });
+        }
+    </script>
+    {% block scripts %}{% endblock %}
 </body>
 </html>

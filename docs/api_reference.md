@@ -103,7 +103,8 @@ cached record status.
 
 ### `POST /webhooks/teams`
 
-Receives Bot Framework activities (adaptive-card clicks).
+Receives Bot Framework activities (adaptive-card clicks) **or** MessageCard
+`HttpPOST` callbacks from an incoming webhook.
 
 **Request body** (activity envelope):
 
@@ -118,6 +119,13 @@ Receives Bot Framework activities (adaptive-card clicks).
   },
   "from": { "name": "Jane Doe" }
 }
+```
+
+In webhook mode the button payload is POSTed directly (raw JSON or
+form-url-encoded), without the activity envelope:
+
+```json
+{ "action": "approve", "approval_id": "uuid", "issue_key": "PROJ-123" }
 ```
 
 Supported `value.action` values:
@@ -143,6 +151,8 @@ List audit records, most recently updated first.
 **Query params:**
 - `limit` — default `50`, min `1`, max `200`
 - `offset` — default `0`
+- `status` — exact status filter (e.g. `sdl_requested`, `release_ready`)
+- `q` — issue-key substring search
 
 **Response:**
 
@@ -180,6 +190,67 @@ Return the audit record for one issue, or `null` if not found.
   "sdl_approval": "approved",
   "sdm_approval": "approved",
   "meeting_needed": 0
+}
+```
+
+### `GET /rab/records/{issue_key}/events`
+
+Return the approval-event timeline for one issue (`approval_events` rows in
+chronological order).
+
+```json
+[
+  {
+    "id": 1,
+    "issue_key": "PROJ-123",
+    "step": "SDL",
+    "action": "approve",
+    "approver": "Jane Doe",
+    "reason": "Looks good",
+    "created_at": "2026-08-07T09:02:00+00:00"
+  }
+]
+```
+
+### `GET /rab/webhook-events`
+
+List webhook deliveries recorded in `webhook_events`, newest first.
+
+**Query params:** `limit` (default `50`, max `200`), `offset` (default `0`).
+
+```json
+{
+  "total": 1,
+  "events": [
+    {
+      "id": 1,
+      "event_id": "event-12345",
+      "issue_key": "PROJ-123",
+      "event_type": "jira:issue_created",
+      "status": "received",
+      "created_at": "2026-08-07T09:00:00+00:00"
+    }
+  ]
+}
+```
+
+### `GET /rab/summary`
+
+Pipeline status counts and aging approvals, used by the dashboard overview.
+
+**Query params:** `aging_days` — tickets waiting on approval longer than this
+(default `2`).
+
+```json
+{
+  "total": 5,
+  "counts": { "release_ready": 3, "sdl_requested": 2 },
+  "pending_approval": 2,
+  "validation_failed": 0,
+  "rejected": 0,
+  "release_ready": 3,
+  "meeting_scheduled": 0,
+  "aging": []
 }
 ```
 

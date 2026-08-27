@@ -3,7 +3,7 @@
 ## Current status
 
 The service is feature-complete for the core RAB automation loop and fully
-documented. **129 tests pass** across 18 files.
+documented. The test suite currently contains 163 tests; run `pytest -q` for the current result.
 
 ### What works today
 
@@ -15,7 +15,8 @@ documented. **129 tests pass** across 18 files.
 - JSON query API (`/rab/records`) + Prometheus-style metrics (`/metrics`)
 - HTML dashboard (health, records, test results) with a "Run Tests" button
 - Dummy approval flow (`/demo/flow`) for end-to-end demos without external deps
-- Optional Azure DevOps, Teams/Bot, SharePoint, Azure Key Vault integrations
+- Optional Azure DevOps, Teams (incoming webhook or Bot), SharePoint, Azure
+  Key Vault integrations
 - Production hardening: timeouts, column allowlisting, key-vault error
   sanitization, configurable logging
 
@@ -50,9 +51,9 @@ documented. **129 tests pass** across 18 files.
 
 ### Correctness / production-readiness
 
-- [ ] **Persistent approval state.** `ApprovalService` keeps state in-memory; it
-      resets on restart and is not multi-worker safe. Move state to SQLite/Redis
-      for horizontal scaling.
+- [ ] **Multi-worker approval races.** Approval state is persisted in SQLite and
+      rehydrated after restart, but the per-issue asyncio lock is process-local.
+      Use a database transaction/row lock or Redis for horizontal scaling.
 - [ ] **Multi-worker SQLite.** Writes are serialized by SQLite. A connection pool
       or PostgreSQL is recommended for high write volume.
 - [ ] **Retry logic on integrations.** Audit item M-02 (request retries) was
@@ -66,12 +67,10 @@ documented. **129 tests pass** across 18 files.
       headers, so they may reprocess. Consider an event-ID-based webhook layer.
 
 ### UX / tooling
-- [ ] **Auth on the dashboard & metrics.** `/metrics`, `/health`, `/rab/records`,
-      and the dashboard have no default auth — gate via reverse proxy or add
-      SSO/middleware auth.
-- [ ] **`/demo/flow` & `/dashboard/test` exposure** — great for demos, but should
-      be feature-flagged or network-restricted in prod (they write real records /
-      run subprocesses).
+- [x] **Auth on HTTP endpoints.** Configure `ACCESS_TOKEN` outside local/test;
+      the shared middleware protects dashboard and API routes.
+- [x] **Demo/test exposure.** Demo and test dashboard routes are enabled only in
+      local/test by default and can be explicitly feature-flagged.
 - [ ] **Email/Comment escalation** on rejected approvals.
 
 ### Observability

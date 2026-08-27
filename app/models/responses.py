@@ -17,15 +17,8 @@ class HealthResponse(BaseModel):
     service: str
     environment: str
     jira: JiraConnectionInfo | None = None
-    azure_devops: JiraConnectionInfo | None = None
-    teams: JiraConnectionInfo | None = None
 
-
-class RootResponse(BaseModel):
-    """Response model for the root endpoint."""
-
-    service: str
-    status: str
+    model_config = {"exclude_defaults": True}
 
 
 class JiraWebhookResponse(BaseModel):

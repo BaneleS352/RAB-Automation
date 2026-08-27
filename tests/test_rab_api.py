@@ -73,3 +73,50 @@ class TestRabApi:
         assert data["sdl_approval"] == "approved"
         assert data["sdm_approval"] == "approved"
         assert data["meeting_needed"] == 1
+
+    @pytest.mark.asyncio
+    async def test_list_records_filter_by_status(self, client: TestClient) -> None:
+        repo = RabRepository()
+        await repo.record_validation("FLT-A", True, "OK")
+        await repo.upsert_record("FLT-B", {"issue_key": "FLT-B", "status": "release_ready"})
+        data = client.get("/rab/records?status=release_ready").json()
+        keys = [r["issue_key"] for r in data["records"]]
+        assert "FLT-B" in keys
+        assert "FLT-A" not in keys
+
+    @pytest.mark.asyncio
+    async def test_list_records_search_by_q(self, client: TestClient) -> None:
+        repo = RabRepository()
+        await repo.upsert_record("SRCH-42", {"issue_key": "SRCH-42"})
+        data = client.get("/rab/records?q=SRCH-42").json()
+        assert any(r["issue_key"] == "SRCH-42" for r in data["records"])
+
+    @pytest.mark.asyncio
+    async def test_webhook_events_endpoint(self, client: TestClient) -> None:
+        repo = RabRepository()
+        await repo.record_webhook_event("wh-123", "WH-1", "jira:issue_created")
+        data = client.get("/rab/webhook-events").json()
+        assert data["total"] >= 1
+        ids = [e["event_id"] for e in data["events"]]
+        assert "wh-123" in ids
+
+    @pytest.mark.asyncio
+    async def test_record_events_endpoint(self, client: TestClient) -> None:
+        repo = RabRepository()
+        await repo.record_approval_event("EVT-K", "SDL", "approve", "Jane", "ok")
+        data = client.get("/rab/records/EVT-K/events").json()
+        assert data[0]["step"] == "SDL"
+        assert data[0]["action"] == "approve"
+        assert data[0]["approver"] == "Jane"
+
+    @pytest.mark.asyncio
+    async def test_summary_endpoint(self, client: TestClient) -> None:
+        repo = RabRepository()
+        await repo.record_validation("SUM-A", True, "OK")
+        await repo.upsert_record("SUM-B", {
+            "issue_key": "SUM-B", "status": "sdl_requested", "sdl_approval": "requested",
+        })
+        data = client.get("/rab/summary").json()
+        assert data["total"] >= 2
+        assert "counts" in data
+        assert data["pending_approval"] >= 1

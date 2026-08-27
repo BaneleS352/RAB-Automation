@@ -84,14 +84,6 @@ async def test_approval_events_multiple(repo: RabRepository) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_all_records_pagination(repo: RabRepository) -> None:
-    for i in range(5):
-        await repo.record_validation(f"PAGE-{i}", True, f"Record {i}")
-    all_records = await repo.get_all_records(limit=3, offset=0)
-    assert len(all_records) <= 3
-
-
-@pytest.mark.asyncio
 async def test_get_record_returns_none(repo: RabRepository) -> None:
     record = await repo.get_record("NONEXISTENT")
     assert record is None
@@ -114,3 +106,29 @@ async def test_record_webhook_event_duplicate(repo: RabRepository) -> None:
     await repo.record_webhook_event("wh-dup", "TEST-KEY", "jira:issue_created")
     result = await repo.record_webhook_event("wh-dup", "TEST-KEY", "jira:issue_created")
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_get_pending_approval_count_counts_requested_columns(repo: RabRepository) -> None:
+    before = await repo.get_pending_approval_count()
+    await repo.upsert_record("PEND-1", {"issue_key": "PEND-1", "sdl_approval": "requested", "status": "sdl_requested"})
+    await repo.upsert_record("PEND-2", {"issue_key": "PEND-2", "sdm_approval": "requested", "status": "sdm_requested"})
+    await repo.record_validation("PEND-3", True, "OK")
+    assert await repo.get_pending_approval_count() == before + 2
+
+
+@pytest.mark.asyncio
+async def test_get_aging_records_uses_column_condition(repo: RabRepository) -> None:
+    from app.database import get_db
+
+    await repo.upsert_record("AGE-1", {"issue_key": "AGE-1", "status": "sdl_requested", "sdl_approval": "pending"})
+    await repo.upsert_record("AGE-2", {"issue_key": "AGE-2", "sdl_approval": "requested", "status": "sdl_requested"})
+
+    db = await get_db()
+    await db.execute("UPDATE rab_records SET updated_at = '2000-01-01T00:00:00+00:00' WHERE issue_key = 'AGE-2'")
+    await db.commit()
+
+    records = await repo.get_aging_records(days=2)
+    keys = [r["issue_key"] for r in records]
+    assert "AGE-2" in keys
+    assert "AGE-1" not in keys

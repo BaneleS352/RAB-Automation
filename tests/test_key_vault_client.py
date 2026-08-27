@@ -40,3 +40,32 @@ class TestKeyVaultClient:
         client = KeyVaultClient("https://myvault.vault.azure.net")
         value = client.get_secret("FALLBACK_SECRET")
         assert value == "fallback-value"
+
+
+class TestKeyVaultConfigWiring:
+    def test_settings_ignore_vault_when_not_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AZURE_VAULT_URL", "")
+        monkeypatch.setenv("JIRA_API_TOKEN", "env-token")
+        from app.config import get_settings
+        assert get_settings().JIRA_API_TOKEN == "env-token"
+
+    def test_settings_resolve_secrets_from_vault(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.config import _resolve_vault_secrets, get_settings
+
+        _resolve_vault_secrets.cache_clear()
+        monkeypatch.setenv("AZURE_VAULT_URL", "https://myvault.vault.azure.net")
+        monkeypatch.setenv("JIRA_API_TOKEN", "env-token")
+
+        vault_values = {"JIRA_API_TOKEN": "vault-token"}
+
+        def fake_get_secret(self, secret_name: str) -> str:
+            if secret_name in vault_values:
+                return vault_values[secret_name]
+            raise KeyVaultClientError(f"Secret not found: {secret_name}")
+
+        monkeypatch.setattr(KeyVaultClient, "get_secret", fake_get_secret)
+
+        settings = get_settings()
+        assert settings.JIRA_API_TOKEN == "vault-token"
+        # TEAMS_BOT_CLIENT_SECRET and AZURE_DEVOPS_PAT have been removed from config
+        assert settings.AZURE_VAULT_URL == "https://myvault.vault.azure.net"

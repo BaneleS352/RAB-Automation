@@ -1,4 +1,4 @@
-"""Tests for the health and root endpoints."""
+"""Tests for the health and root endpoints - updated for integration removal."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,24 +11,16 @@ def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _mock_connections(monkeypatch: pytest.MonkeyPatch) -> None:
+def _mock_jira_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api.health import _health_cache
     from app.services.jira_client import JiraClient
+
+    _health_cache["services"] = None
+    _health_cache["at"] = 0.0
 
     async def mock_jira_check(self):
         return {"connected": True, "details": "Jira API is reachable and authenticated."}
     monkeypatch.setattr(JiraClient, "check_connection", mock_jira_check)
-
-    from app.services.azure_devops_client import AzureDevOpsClient
-
-    async def mock_azure_check(self):
-        return {"connected": True, "details": "Azure DevOps API is reachable and authenticated."}
-    monkeypatch.setattr(AzureDevOpsClient, "check_connection", mock_azure_check)
-
-    from app.services.teams_client import TeamsClient
-
-    async def mock_teams_check(self):
-        return {"connected": True, "details": "Azure Bot authentication succeeded."}
-    monkeypatch.setattr(TeamsClient, "check_connection", mock_teams_check)
 
 
 @pytest.fixture()
@@ -58,13 +50,30 @@ class TestHealthEndpoint:
         data = client.get("/health").json()
         assert data["jira"]["connected"] is True
 
-    def test_contains_azure_devops_connection(self, client: TestClient) -> None:
+    def test_jira_is_only_service_reported(self, client: TestClient) -> None:
         data = client.get("/health").json()
-        assert data["azure_devops"]["connected"] is True
+        # Only jira should be reported; azure_devops and teams are removed
+        assert "jira" in data
+        assert data["jira"]["connected"] is True
+        assert data["service"] == "rab-automation"
+        assert data["environment"] == "test"
+    def test_connection_checks_are_cached_within_ttl(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.api.health import _health_cache
+        from app.services.jira_client import JiraClient
 
-    def test_contains_teams_connection(self, client: TestClient) -> None:
-        data = client.get("/health").json()
-        assert data["teams"]["connected"] is True
+        _health_cache["services"] = None
+        _health_cache["at"] = 0.0
+        calls = {"jira": 0}
+
+        async def jira_check(self):
+            calls["jira"] += 1
+            return {"connected": True, "details": "ok"}
+
+        monkeypatch.setattr(JiraClient, "check_connection", jira_check)
+
+        client.get("/health")
+        client.get("/health")
+        assert calls["jira"] == 1
 
 
 class TestRootEndpoint:

@@ -1,1 +1,4 @@
 .env
+__pycache__/
+*.py[cod]
+rab_automation.db

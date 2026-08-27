@@ -75,3 +75,66 @@ class TestFieldValidator:
         result2 = validator2.validate({"fields": fields})
         assert result2.valid is False
         assert "RAB Approver" in result2.missing_fields
+
+    def test_person_object_field_is_normalized(self, monkeypatch):
+        monkeypatch.setenv("JIRA_FIELD_RAB_APPROVER", "customfield_rab_approver")
+        validator = FieldValidator()
+        fields = {
+            "assignee": {"displayName": "Alice"},
+            "reporter": {"displayName": "Bob"},
+            "customfield_rab_approver": {"displayName": "Charlie"},
+        }
+        result = validator.validate({"fields": fields})
+        assert result.valid is True
+
+    def test_empty_person_object_field_counts_as_missing(self, monkeypatch):
+        monkeypatch.setenv("JIRA_FIELD_RAB_APPROVER", "customfield_rab_approver")
+        validator = FieldValidator()
+        fields = {
+            "assignee": {"displayName": "Alice"},
+            "reporter": {"displayName": "Bob"},
+            "customfield_rab_approver": {},
+        }
+        result = validator.validate({"fields": fields})
+        assert result.valid is False
+        assert "RAB Approver" in result.missing_fields
+
+    def test_option_object_field_is_normalized(self, monkeypatch):
+        monkeypatch.setenv("JIRA_FIELD_ENVIRONMENT", "customfield_environment")
+        validator = FieldValidator()
+        fields = {
+            "assignee": {"displayName": "Alice"},
+            "reporter": {"displayName": "Bob"},
+            "customfield_environment": {"value": "Production"},
+        }
+        result = validator.validate({"fields": fields})
+        assert result.valid is True
+
+    def test_multi_value_list_is_joined(self, monkeypatch):
+        monkeypatch.setenv("JIRA_FIELD_ENVIRONMENT", "customfield_environment")
+        validator = FieldValidator()
+        fields = {
+            "assignee": {"displayName": "Alice"},
+            "reporter": {"displayName": "Bob"},
+            "customfield_environment": [
+                {"value": "Production"},
+                {"value": "Staging"},
+                {"value": ""},
+                None,
+            ],
+        }
+        result = validator.validate({"fields": fields})
+        assert result.valid is True
+        assert validator.extract_field_value({"fields": fields}, "environment") == "Production, Staging"
+
+    def test_all_empty_list_values_count_as_missing(self, monkeypatch):
+        monkeypatch.setenv("JIRA_FIELD_ENVIRONMENT", "customfield_environment")
+        validator = FieldValidator()
+        fields = {
+            "assignee": {"displayName": "Alice"},
+            "reporter": {"displayName": "Bob"},
+            "customfield_environment": [{"value": ""}, {"value": ""}],
+        }
+        result = validator.validate({"fields": fields})
+        assert result.valid is False
+        assert "Environment" in result.missing_fields

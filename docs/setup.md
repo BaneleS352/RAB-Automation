@@ -26,7 +26,10 @@ pip install -r requirements.txt
 
 ## 2. Environment variables
 
-Copy the example file and fill in your values:
+Copy the example file and fill in your values. For step-by-step instructions
+on creating each credential (Atlassian API tokens, Azure DevOps PATs, Teams
+webhooks/bot secrets, Key Vault secrets), see the
+[Credentials Guide](credentials.md):
 
 ```bash
 cp .env.example .env
@@ -103,7 +106,19 @@ Map the logical RAB field names to the Jira field keys (standard names like
 | `AZURE_DEVOPS_PAT` | Personal Access Token |
 | `AZURE_DEVOPS_API_VERSION` | REST API version (default `7.1`) |
 
-### Teams / Azure Bot (optional)
+### Teams (optional — two modes)
+
+The service uses the **incoming webhook** mode automatically when `TEAMS_WEBHOOK_URL`
+is set; otherwise it falls back to the Azure Bot mode.
+
+**Option A — incoming webhook** (no app registration, no premium license):
+
+| Variable | Purpose |
+|----------|---------|
+| `TEAMS_WEBHOOK_URL` | Connector URL from a Teams channel's Incoming Webhook connector |
+| `TEAMS_CALLBACK_URL` | Public URL pointing at `/webhooks/teams`, used as the `HttpPOST` target for card buttons |
+
+**Option B — Azure Bot** (full interactive adaptive cards with reason input):
 
 | Variable | Purpose |
 |----------|---------|

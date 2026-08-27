@@ -10,13 +10,13 @@ Receives Jira webhook events, validates RAB-required ticket fields, drives a seq
 - **Field validation** of 12 RAB-required ticket fields (Date/Time, RAB Approver, PR Link, Pipeline Link, Developer, Team Lead, PM, QA, Environment, Rollback details, etc.)
 - **Sequential approval state machine**: SDL → SDM, with approve/reject handling and reason capture
 - **Azure DevOps integration**: pull-request and pipeline status checks (optional)
-- **Teams notifications**: adaptive cards for validation, approval requests, decisions, and release-ready (optional)
+- **Teams notifications**: adaptive cards for validation, approval requests, decisions, and release-ready — via Azure Bot **or** a simple incoming webhook (no app registration, no premium licensing)
 - **SQLite audit trail**: `rab_records`, `approval_events`, `webhook_events`
 - **Production hardening**: async task queue, Azure Key Vault secret resolution, request metrics middleware, configurable HTTP timeouts, SQL-injection-safe column allowlisting
-- **HTML dashboard**: health, test, and records views (`/dashboard/*`)
+- **HTML dashboard**: overview KPIs, audit-trail search/filter/pagination, per-issue timeline, webhook ledger, metrics, and demo views (`/dashboard/*`)
 - **Run tests from the UI**: a "Run Tests" button in the dashboard navbar executes the full pytest suite in an isolated subprocess
 - **Dummy approval flow**: `/demo/flow` runs a full simulated SDL → SDM → meeting workflow against a stub Jira client, producing real logs and audit records with no external calls
-- **129 passing tests** across 18 test files
+- **163 passing tests** across 18 test files
 
 ## Project Structure
 
@@ -55,7 +55,7 @@ rab-automation/
       dummy_flow.py            # Simulated RAB flow with stub Jira client
     templates/                 # Jinja2 HTML templates
     static/css/                # Dashboard styling
-  tests/                       # 18 test files, 129 tests
+      tests/                       # 18 test files, 163 tests (run pytest for current result)
   .env.example
   requirements.txt
   pyproject.toml
@@ -104,8 +104,12 @@ The service starts at `http://localhost:8000`. The dashboard is at `http://local
 | Endpoint | Description |
 |---|---|
 | `/` | Redirects to `/dashboard/health` |
-| `/dashboard/health` | Connection status for Jira, Azure DevOps, Teams |
-| `/dashboard/records` | Audit-trail table of processed issues |
+| `/dashboard/health` | **Overview** — connection status + pipeline KPIs, aging approvals, recent failures (auto-refreshes every 30s) |
+| `/dashboard/records` | Audit-trail table with issue-key search, status filter, and pagination |
+| `/dashboard/records/{issue_key}` | Per-issue detail page with the full approval-event timeline |
+| `/dashboard/webhooks` | Webhook ingestion ledger (`webhook_events`) |
+| `/dashboard/metrics` | Human-readable operational metrics (uptime, requests, queue load) |
+| `/dashboard/demo` | Form-driven dummy approval flow |
 | `/dashboard/test` | Runs the full pytest suite and shows pass/fail summary |
 
 ### JSON API
@@ -114,15 +118,18 @@ The service starts at `http://localhost:8000`. The dashboard is at `http://local
 |---|---|
 | `GET /health` | Health status + per-integration connection details |
 | `GET /metrics` | Prometheus-style metrics (uptime, requests, failures, queue state) |
-| `GET /rab/records` | List audit records (`?limit=&offset=`) |
+| `GET /rab/records` | List audit records (`?limit=&offset=&status=&q=`) |
 | `GET /rab/records/{issue_key}` | Audit record for a single issue |
+| `GET /rab/records/{issue_key}/events` | Approval-event timeline for a single issue |
+| `GET /rab/webhook-events` | Webhook ingestion history (`webhook_events`) |
+| `GET /rab/summary` | Pipeline counts + aging approvals (`?aging_days=`) |
 
 ### Webhooks
 
 | Endpoint | Description |
 |---|---|
 | `POST /webhooks/jira` | Receive Jira events; pass `X-Idempotency-Key` to deduplicate |
-| `POST /webhooks/teams` | Receive Bot Framework activities (approve/reject/meeting card clicks) |
+| `POST /webhooks/teams` | Receive Bot Framework activities **or** MessageCard `HttpPOST` callbacks (approve/reject/meeting card clicks) |
 | `GET /demo/flow` | Run simulated RAB flow (`?issue_key=&reject=&needs_meeting=`) — produces logs + audit records |
 
 #### Jira webhook example
@@ -168,6 +175,15 @@ Every stage is persisted via `app/repositories/rab_repository.py`, so the full l
 - `AZURE_DEVOPS_API_VERSION` — Azure DevOps REST API version (default `7.1`).
 - `JIRA_FIELD_*` — map logical RAB field names to Jira custom field IDs.
 - `LOG_LEVEL` — `DEBUG`, `INFO`, `WARNING`, etc. (default `INFO`).
+
+### Teams: two delivery modes
+
+The service picks the incoming-webhook mode automatically when `TEAMS_WEBHOOK_URL` is set, and otherwise falls back to Azure Bot.
+
+| Mode | Config | Notes |
+|---|---|---|
+| **Incoming webhook** (simplest) | `TEAMS_WEBHOOK_URL`, plus `TEAMS_CALLBACK_URL` | No app registration or premium license. Cards are delivered as MessageCards; `Action.Submit` buttons become `HttpPOST` buttons that POST back to `TEAMS_CALLBACK_URL` (a publicly reachable URL pointing at `/webhooks/teams`). MessageCards don't support text inputs, so the in-card rejection "reason" field is not captured in this mode. |
+| **Azure Bot** | `TEAMS_BOT_APP_ID`, `TEAMS_BOT_CLIENT_SECRET`, `TEAMS_CHANNEL_ID` | Full adaptive-card `Action.Submit` interactivity with the reason input, but requires app registration and OAuth. |
 
 ## Running Tests
 

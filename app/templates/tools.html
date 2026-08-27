@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Tools — RAB Monitor{% endblock %}
+{% block content %}
+<div class="page-header">
+    <button class="menu-button" id="menuButton" aria-label="Toggle menu">☰</button>
+    <div>
+        <h1>Tools</h1>
+        <p class="muted" style="margin:0;">Operational workspace for test data, integrations, webhooks and service metrics.</p>
+    </div>
+    <a class="btn btn-ghost btn-sm" href="/dashboard/health">← Overview</a>
+</div>
+
+<div class="tool-intro"><strong>Choose an operational area</strong><span>Demo Lab simulates flows, Jira Sync backfills issues, and the ledger and metrics support observability.</span></div>
+<!-- Demo Lab -->
+<div class="card" style="margin-top:1rem;">
+    <div class="card-header">
+        <h3>Demo Lab</h3>
+        <span class="muted" style="font-size:0.8rem;">Seed pipeline with synthetic issues</span>
+    </div>
+    <div class="card-body">
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.9rem;">
+            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="seed"><button class="btn btn-primary btn-sm">Seed full dataset (8 issues) →</button></form>
+            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdl"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDL"><button class="btn btn-outline btn-sm">Pending SDL</button></form>
+            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdm"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDM"><button class="btn btn-outline btn-sm">Pending SDM</button></form>
+            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="validation_failed"><input type="hidden" name="issue_key" value="DEMO-FAIL"><button class="btn btn-outline btn-sm">Validation failed</button></form>
+            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="aging"><input type="hidden" name="issue_key" value="DEMO-AGING"><button class="btn btn-outline btn-sm">Aging</button></form>
+        </div>
+        <form method="post" action="/dashboard/tools" style="display:flex; flex-wrap:wrap; gap:0.9rem; align-items:flex-end; padding-top:0.9rem; border-top:1px solid var(--border);">
+            <input type="hidden" name="action" value="custom">
+            <label class="field" style="flex:1; min-width:140px;">
+                <span class="detail-label">Issue Key</span>
+                <input type="text" name="issue_key" value="DEMO-1" required pattern="[A-Z]+-[0-9]+">
+            </label>
+            <label class="field" style="flex:2; min-width:200px;">
+                <span class="detail-label">Summary</span>
+                <input type="text" name="summary" value="Demo release ticket" style="width:100%;">
+            </label>
+            <label class="field" style="min-width:180px;">
+                <span class="detail-label">Scenario</span>
+                <select name="scenario" style="padding:0.6rem 0.75rem; border:1px solid var(--border); border-radius:var(--radius); font-size:0.875rem; background:var(--surface);">
+                    <option value="">Full approval</option>
+                    <option value="pending_sdl">Pending at SDL</option>
+                    <option value="pending_sdm">Pending at SDM</option>
+                    <option value="validation_failed">Validation failed</option>
+                    <option value="rejected_sdl">Rejected by SDL</option>
+                    <option value="rejected_sdm">Rejected by SDM</option>
+                    <option value="aging">Aging — pending 3 days</option>
+                </select>
+            </label>
+            <label class="field checkbox-field">
+                <input type="checkbox" name="needs_meeting" value="true">
+                <span>Meeting</span>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm">Run →</button>
+        </form>
+        {% if result %}
+        <div class="tool-result result-{{ result.status }}">
+            <strong>Demo: {{ result.issue_key }} — {{ result.status | upper }}</strong>
+            <div class="steps" style="margin-top:0.4rem;">
+                {% for s in result.steps %}<span class="step done">{{ s.step }}</span>{% if not loop.last %}<span style="color:var(--muted-2);">→</span>{% endif %}{% endfor %}
+            </div>
+            <div style="margin-top:0.5rem; display:flex; gap:0.5rem;"><a class="btn btn-primary btn-sm" href="/dashboard/records/{{ result.issue_key }}">View record</a><a class="btn btn-ghost btn-sm" href="/dashboard/health">Overview</a></div>
+        </div>
+        {% endif %}
+        {% if seed_results %}
+        <div style="margin-top:0.9rem; padding:0.75rem; background:var(--success-soft); border:1px solid var(--success-border); border-radius:var(--radius);">
+            <strong>Seeded {{ seed_results|length }} issues</strong> — <a href="/dashboard/health">View pipeline KPIs</a> • <a href="/dashboard/records">Browse issues</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Sync + Metrics row -->
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-top:1rem;">
+    <div class="card">
+        <div class="card-header"><h3>Jira Sync</h3><span class="muted" style="font-size:0.8rem;">All creation methods</span></div>
+        <div class="card-body">
+            <p class="muted" style="margin:0 0 0.75rem; font-size:0.85rem;">Pulls <code>project = JIRA_PROJECT_KEY ORDER BY updated DESC</code> via <code>/rest/api/3/search/jql</code>. Webhook covers live events, sync backfills existing/imported issues.</p>
+            <form method="post" action="/dashboard/tools" style="margin:0;"><input type="hidden" name="action" value="sync"><button type="submit" class="btn btn-outline btn-sm">Sync all Jira issues →</button></form>
+            {% if sync_result %}
+            <div class="tool-sync-result {% if sync_result.failed %}sync-failed{% else %}sync-success{% endif %}">
+                <strong>Sync:</strong> {{ sync_result.synced }} synced • {{ sync_result.created }} created • {{ sync_result.updated }} updated • {{ sync_result.failed }} failed
+                {% if sync_result.errors %}<ul style="margin:0.4rem 0 0 1.1rem;">{% for e in sync_result.errors[:3] %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3>Ops Metrics</h3><a class="btn btn-ghost btn-sm" href="/metrics">/metrics JSON</a></div>
+        <div class="card-body">
+            <div class="kpi-grid" style="grid-template-columns: repeat(2, 1fr); gap:0.6rem; margin:0;">
+                <div class="kpi-card" style="padding:0.75rem;"><span class="kpi-value" style="font-size:1.2rem;">{{ metrics.uptime_seconds | int }}</span><span class="kpi-label">Uptime (s)</span></div>
+                <div class="kpi-card" style="padding:0.75rem;"><span class="kpi-value" style="font-size:1.2rem;">{{ metrics.requests_total }}</span><span class="kpi-label">Requests</span></div>
+                <div class="kpi-card {{ 'kpi-fail' if metrics.requests_failed else '' }}" style="padding:0.75rem;"><span class="kpi-value" style="font-size:1.2rem;">{{ metrics.requests_failed }}</span><span class="kpi-label">Failed</span></div>
+                <div class="kpi-card" style="padding:0.75rem;"><span class="kpi-value" style="font-size:1.2rem;">{{ metrics.avg_duration_ms }}</span><span class="kpi-label">Avg ms</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Webhooks -->
+<div class="card" style="margin-top:1rem;">
+    <div class="card-header"><h3>Webhook Ledger</h3><span class="muted" style="font-size:0.8rem;">Last 20 deliveries</span></div>
+    <div class="card-body" style="padding:0;">
+        {% if events %}
+        <div class="table-wrapper" style="border:none; box-shadow:none; margin:0;">
+            <table>
+                <thead><tr><th>ID</th><th>Event ID</th><th>Issue</th><th>Type</th><th>Status</th><th>Received</th></tr></thead>
+                <tbody>
+                {% for e in events %}
+                <tr class="table-link-row" data-detail-url="/dashboard/records/{{ e.issue_key }}" tabindex="0" role="link" aria-label="Open {{ e.issue_key }} details"><td><small style="color:var(--muted);">{{ e.id }}</small></td><td><code style="font-size:0.75rem;">{{ e.event_id[:14] }}…</code></td><td><a href="/dashboard/records/{{ e.issue_key }}"><strong>{{ e.issue_key }}</strong></a></td><td><small>{{ e.event_type }}</small></td><td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td><td><small style="font-family:'JetBrains Mono',monospace; color:var(--muted);">{{ e.created_at[:19] | replace('T',' ') }}</small></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div style="padding:0.75rem 1.25rem;"><a class="btn btn-ghost btn-sm" href="/dashboard/webhooks">Full ledger →</a></div>
+        {% else %}
+        <p class="empty-state" style="border:none; margin:0;">No webhook events yet — send to <code>/webhooks/jira</code> or run demo.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

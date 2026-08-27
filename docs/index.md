@@ -9,6 +9,7 @@ workflow with an SQLite audit trail, Teams notifications, and an HTML dashboard.
 | Topic | Guide |
 |-------|-------|
 | Install & configure | [Setup & Configuration](setup.md) |
+| Where to get every credential | [Credentials Guide](credentials.md) |
 | All HTTP endpoints & payloads | [API Reference](api_reference.md) |
 | The SDL → SDM workflow in detail | [Architecture](architecture.md) |
 | SQLite schema & repository layer | [Data & Audit Trail](database.md) |
@@ -23,10 +24,10 @@ workflow with an SQLite audit trail, Teams notifications, and an HTML dashboard.
 - **Framework**: FastAPI (Uvicorn ASGI server)
 - **Persistence**: async SQLite via `aiosqlite`
 - **External integrations**: Jira Cloud (required for full flow),
-  Azure DevOps, Microsoft Teams / Bot Framework (optional)
+  Azure DevOps, Microsoft Teams (incoming webhook or Bot Framework; optional)
 - **Observability**: `/health`, `/metrics`, HTML dashboard,
   structured `INFO` logging
-- **Tests**: `pytest` with `pytest-asyncio`, **129 tests** across 18 files
+- **Tests**: `pytest` with `pytest-asyncio`, **163 tests** across 18 files
 
 ## Feature checklist
 
@@ -40,13 +41,13 @@ workflow with an SQLite audit trail, Teams notifications, and an HTML dashboard.
 - [x] SQLite audit trail (`rab_records`, `approval_events`, `webhook_events`)
 - [x] `GET /rab/records` JSON API with pagination
 - [x] Azure DevOps client (PR + pipeline checks; optional)
-- [x] Teams / Bot Framework notifications (optional)
+- [x] Teams notifications via incoming webhook (MessageCard `HttpPOST` buttons) or Bot Framework (optional)
 - [x] Azure Key Vault secret resolution with env fallback
 - [x] In-process async task queue
 - [x] `/metrics` endpoint + request middleware
 - [x] HTTP client timeouts (30s) everywhere
 - [x] SQL-injection-safe column allowlisting
-- [x] HTML dashboard (health, records, test results)
+- [x] HTML dashboard (overview KPIs, records search/filter/pagination, per-issue timeline, webhook ledger, metrics, demo)
 - [x] "Run Tests" button in the dashboard
 - [x] Dummy approval flow (`GET /demo/flow`)
 

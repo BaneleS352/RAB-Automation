@@ -1,43 +1,83 @@
 {% extends "base.html" %}
-{% block title %}Audit Records — RAB Automation{% endblock %}
+{% block title %}Issues — RAB Monitor{% endblock %}
 {% block content %}
-<h1>RAB Audit Records</h1>
+<div class="page-header">
+    <button class="menu-button" id="menuButton" aria-label="Toggle menu">☰</button>
+    <div>
+        <h1>RAB Audit Records</h1>
+        <p class="muted" style="margin:0;">Search, filter and inspect the monitored Jira issues.</p>
+    </div>
+    <a class="btn btn-outline btn-sm" href="/dashboard/records?status={{ status }}&q={{ q }}">↻ Refresh</a>
+</div>
+
+<form method="get" action="/dashboard/records" class="filter-form">
+    <input type="hidden" name="offset" value="0">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search issue key…" aria-label="Search issue key">
+    <select name="status" aria-label="Filter by status">
+        <option value="">All statuses</option>
+        {% for s in statuses %}
+        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+    <a class="btn btn-ghost btn-sm" href="/dashboard/records">Clear</a>
+</form>
+
+<p class="muted">{{ records|length }} of {{ total }} records shown {% if q or status %}— filtered{% endif %}</p>
+
 {% if records %}
 <div class="table-wrapper">
     <table>
         <thead>
             <tr>
                 <th>Issue Key</th>
+                <th>Summary</th>
                 <th>Status</th>
-                <th>SDL Approval</th>
-                <th>SDM Approval</th>
+                <th>SDL</th>
+                <th>SDM</th>
                 <th>Validation</th>
-                <th>Meeting Needed</th>
+                <th>Meeting</th>
                 <th>Updated</th>
             </tr>
         </thead>
         <tbody>
             {% for r in records %}
-            <tr>
-                <td><strong>{{ r.issue_key }}</strong></td>
+            <tr class="table-link-row" data-detail-url="/dashboard/records/{{ r.issue_key }}" tabindex="0" role="link" aria-label="Open {{ r.issue_key }} details">
+                <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
+                <td><small style="color:var(--text-2);">{{ r.summary[:40] }}{% if r.summary|length > 40 %}…{% endif %}</small></td>
+                <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
+                <td><span class="badge badge-{{ r.sdl_approval }}">{{ r.sdl_approval }}</span></td>
+                <td><span class="badge badge-{{ r.sdm_approval }}">{{ r.sdm_approval }}</span></td>
+                <td><small style="max-width:160px; display:inline-block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.validation_result[:40] }}{% if r.validation_result|length > 40 %}…{% endif %}</small></td>
                 <td>
-                    <span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span>
+                    {% if r.meeting_needed %}<span class="badge badge-meeting">Yes</span>
+                    {% else %}<span class="badge badge-none">No</span>{% endif %}
                 </td>
-                <td>
-                    <span class="badge badge-{{ r.sdl_approval }}">{{ r.sdl_approval }}</span>
-                </td>
-                <td>
-                    <span class="badge badge-{{ r.sdm_approval }}">{{ r.sdm_approval }}</span>
-                </td>
-                <td><small>{{ r.validation_result[:60] }}{% if r.validation_result|length > 60 %}…{% endif %}</small></td>
-                <td>{{ 'Yes' if r.meeting_needed else 'No' }}</td>
-                <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
+                <td><small style="color:var(--muted);">{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
+
+<nav class="pagination" aria-label="Pagination">
+    {% if offset > 0 %}
+    <a class="btn btn-outline btn-sm" href="/dashboard/records?offset={{ [0, offset - limit] | max }}&status={{ status }}&q={{ q }}">« Previous</a>
+    {% else %}
+    <span class="btn btn-disabled btn-sm">« Previous</span>
+    {% endif %}
+    <span class="page-info">Page {{ (offset // limit) + 1 }} • {{ total }} total</span>
+    {% if offset + limit < total %}
+    <a class="btn btn-outline btn-sm" href="/dashboard/records?offset={{ offset + limit }}&status={{ status }}&q={{ q }}">Next »</a>
+    {% else %}
+    <span class="btn btn-disabled btn-sm">Next »</span>
+    {% endif %}
+</nav>
 {% else %}
-<p class="empty-state">No audit records found.</p>
+<div class="empty-state">
+    <div style="font-size:1.5rem; margin-bottom:0.5rem;">∅</div>
+    <strong>No audit records found</strong>{% if q or status %} matching your filter{% endif %}.<br>
+    <span class="muted">Run the <a href="/dashboard/demo">demo</a> to seed pipeline data, or send a Jira webhook to <code>/webhooks/jira</code>.</span>
+</div>
 {% endif %}
 {% endblock %}

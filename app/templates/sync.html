@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Sync — RAB Monitor{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Jira Sync</h1>
+        <p class="muted" style="margin:0;">Pull all Jira issues into the monitor — regardless of how they were created (UI, API, import, automation). Updates <a href="/dashboard/records">Audit Records</a> and <a href="/dashboard/health">Overview</a>.</p>
+    </div>
+    <a class="btn btn-ghost btn-sm" href="/dashboard/records">View issues</a>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+    <div class="card-body" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+        <div>
+            <strong>Sync project</strong>
+            <p class="muted" style="margin:0.2rem 0 0;">Uses <code>JIRA_PROJECT_KEY</code> if set, otherwise recent 100 issues. Requires <code>JIRA_BASE_URL</code> + <code>JIRA_EMAIL</code> + <code>JIRA_API_TOKEN</code>.</p>
+        </div>
+        <form method="post" action="/dashboard/sync" style="margin:0;">
+            <button type="submit" class="btn btn-primary">Sync all Jira issues →</button>
+        </form>
+    </div>
+</div>
+
+{% if result is not none %}
+<div class="card sync-result {% if result.failed %}sync-failed{% elif result.created or result.updated %}sync-success{% endif %}">
+    <div class="card-header sync-result-header {% if result.failed %}sync-failed{% elif result.created or result.updated %}sync-success{% endif %}">
+        <h3>Sync result</h3>
+        <span class="muted" style="font-size:0.8rem;">{{ result.synced }} processed</span>
+    </div>
+    <div class="card-body">
+        <div class="kpi-grid" style="margin-top:0;">
+            <div class="kpi-card"><span class="kpi-value">{{ result.synced }}</span><span class="kpi-label">Synced</span></div>
+            <div class="kpi-card kpi-ok"><span class="kpi-value">{{ result.created }}</span><span class="kpi-label">Created</span></div>
+            <div class="kpi-card"><span class="kpi-value">{{ result.updated }}</span><span class="kpi-label">Updated</span></div>
+            <div class="kpi-card {% if result.failed %}kpi-fail{% endif %}"><span class="kpi-value">{{ result.failed }}</span><span class="kpi-label">Failed</span></div>
+        </div>
+        {% if result.errors %}
+        <div style="margin-top:1rem; padding:0.75rem; background:var(--danger-soft); border:1px solid var(--danger-border); border-radius:var(--radius); font-size:0.85rem;">
+            <strong>Errors:</strong>
+            <ul style="margin:0.4rem 0 0 1.2rem;">
+                {% for e in result.errors %}<li>{{ e }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if total is defined %}
+        <p class="muted" style="margin-top:0.75rem;">Total monitored issues now: <strong style="color:var(--text);">{{ total }}</strong> • <a href="/dashboard/records">Browse all →</a> • <a href="/dashboard/health">Overview →</a></p>
+        {% endif %}
+        {% if result.failed and result.errors and 'not configured' in result.errors[0] %}
+        <p class="muted" style="margin-top:0.5rem;">Tip: Set <code>JIRA_PROJECT_KEY</code> and Jira credentials in <code>.env</code>, then retry. Demo data still works via <a href="/dashboard/demo">Demo Lab</a> without Jira.</p>
+        {% endif %}
+    </div>
+</div>
+{% else %}
+<div class="empty-state" style="margin-top:1rem;">
+    <div style="font-size:1.2rem; margin-bottom:0.4rem;">↔ No sync run yet</div>
+    <span class="muted">All Jira issues are monitored via webhook <code>POST /webhooks/jira</code> automatically. Use sync to backfill existing issues or when webhook wasn't configured.</span>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top:1rem;">
+    <div class="card-header"><h3>How monitoring works</h3></div>
+    <div class="card-body" style="font-size:0.875rem; color:var(--text-2); line-height:1.6;">
+        <ul style="margin:0 0 0 1.1rem;">
+            <li><strong>Webhook</strong> — every <code>jira:issue_created</code> / <code>jira:issue_updated</code> (and now any event with an issue) is upserted: <code>summary</code> + <code>validation_result</code> + <code>status</code>. Approval state is preserved if already tracked.</li>
+            <li><strong>Sync</strong> — <code>POST /rab/sync</code> (JSON) or <code>POST /dashboard/sync</code> (UI) fetches <code>project = JIRA_PROJECT_KEY ORDER BY updated DESC</code> via <code>GET /rest/api/3/search/jql</code> and upserts every issue. Works for issues created via UI, API, CSV import, automation — regardless of webhook history.</li>
+            <li><strong>Demo</strong> — <a href="/dashboard/demo">Demo Lab</a> still seeds synthetic issues (pending SDL/SDM, validation failed, aging) for pipeline preview without Jira.</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

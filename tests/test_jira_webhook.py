@@ -22,7 +22,6 @@ def _set_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def client() -> TestClient:
     """Create a fresh TestClient for each test."""
     from app.main import create_app
-
     return TestClient(create_app())
 
 
