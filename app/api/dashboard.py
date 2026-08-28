@@ -57,9 +57,9 @@ def _config_warnings() -> list[str]:
     ]
     missing = sum(1 for v in field_vars if not getattr(s, v, ""))
     if missing >= 8:
-        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — validator skips them and raw_fields shows null (dashboard blank RAB section)")
+        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — validator now uses description fallback (was previously blank); set customfield IDs to use native fields")
     elif missing:
-        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — some RAB fields will appear blank")
+        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — description fallback active for those fields")
     if not any([s.JIRA_TRANSITION_VALIDATE, s.JIRA_TRANSITION_REQUEST_APPROVAL, s.JIRA_TRANSITION_APPROVE, s.JIRA_TRANSITION_REJECT]):
         warns.append("All JIRA_TRANSITION_* empty — Jira issue status will never transition (was dead code before fix)")
     return warns

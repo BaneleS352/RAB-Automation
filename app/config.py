@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     JIRA_PROJECT_KEY: str = ""
 
     # Custom field mappings (Jira custom field IDs or standard field names)
+    # When empty, the validator now falls back to parsing the Jira description text (RAB block) and the standard 'environment' field — fixes blank-details without requiring customfields
     JIRA_FIELD_PR_LINK: str = ""
     JIRA_FIELD_PIPELINE_LINK: str = ""
     JIRA_FIELD_RAB_APPROVER: str = ""

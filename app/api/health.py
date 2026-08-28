@@ -27,7 +27,7 @@ def _config_warnings() -> list[str]:
     warns: list[str] = []
     if not s.JIRA_PROJECT_KEY:
         warns.append("JIRA_PROJECT_KEY empty — sync falls back to unfiltered 'ORDER BY updated DESC' (cross-project, first 100)")
-    # Field mappings — 10 RAB custom fields; if all empty, dashboard shows blank RAB snapshot
+    # Field mappings — 10 RAB custom fields; if all empty, validator now falls back to description parsing (was previously blank)
     field_vars = [
         "JIRA_FIELD_DATE_TIME", "JIRA_FIELD_RAB_APPROVER", "JIRA_FIELD_PR_LINK", "JIRA_FIELD_PIPELINE_LINK",
         "JIRA_FIELD_DEVELOPER", "JIRA_FIELD_TEAM_LEAD", "JIRA_FIELD_PM", "JIRA_FIELD_QA",
@@ -35,9 +35,9 @@ def _config_warnings() -> list[str]:
     ]
     missing = sum(1 for v in field_vars if not getattr(s, v, ""))
     if missing >= 8:
-        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — validator skips them and raw_fields shows null (dashboard blank RAB section)")
+        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — validator now uses description fallback (was previously blank); set customfield IDs to use native fields")
     elif missing:
-        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — some RAB fields will appear blank")
+        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — description fallback active for those fields")
     if not any([s.JIRA_TRANSITION_VALIDATE, s.JIRA_TRANSITION_REQUEST_APPROVAL, s.JIRA_TRANSITION_APPROVE, s.JIRA_TRANSITION_REJECT]):
         warns.append("All JIRA_TRANSITION_* empty — Jira issue status will never transition (was dead code before fix)")
     return warns
