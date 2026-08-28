@@ -31,6 +31,15 @@ class RabRecord(BaseModel):
     updated_at: str
     creator: str = ""
     assignee: str = ""
+    # Rich fields — previously blank in UI because they were never persisted
+    description: str = ""
+    priority: str = ""
+    issuetype: str = ""
+    jira_status: str = ""
+    labels: str = ""
+    reporter: str = ""
+    jira_updated: str = ""
+    raw_fields: str = ""
 
 
 class RabRecordList(BaseModel):

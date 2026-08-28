@@ -53,6 +53,8 @@ class TestDatabase:
             "rejection_reason", "rejected_by", "meeting_needed",
             "created_at", "updated_at",
             "creator", "assignee",
+            # Rich fields added to fix blank-details (previously only summary/creator/assignee were persisted)
+            "description", "priority", "issuetype", "jira_status", "labels", "reporter", "jira_updated", "raw_fields",
         }
         assert col_names == expected
 

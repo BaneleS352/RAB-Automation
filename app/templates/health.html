@@ -41,8 +41,17 @@
 </div>
 
 <h2 class="section-title">Service Health</h2>
+{% if services.get('_warnings') %}
+<div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 0.8rem 1rem; margin-bottom: 1rem;">
+    <strong style="color:#856404;">⚠ Config warnings (silent no-ops like the blank-details bug):</strong>
+    <ul style="margin: 0.4rem 0 0 1.2rem; color:#856404; font-size: 0.88rem;">
+        {% for w in services.get('_warnings') %}<li>{{ w }}</li>{% endfor %}
+    </ul>
+    <small style="color:#856404;">Fix: set the corresponding <code>JIRA_FIELD_*</code> / <code>JIRA_PROJECT_KEY</code> / <code>JIRA_TRANSITION_*</code> in <code>.env</code> and re-sync.</small>
+</div>
+{% endif %}
 <div class="health-grid">
-    {% for name, info in services.items() %}
+    {% for name, info in services.items() if not name.startswith('_') %}
     <div class="health-card {{ 'status-ok' if info.connected else 'status-fail' }}">
         <h2>{{ name }}</h2>
         <div class="status-row">

@@ -38,6 +38,23 @@ def mock_jira_client(monkeypatch: pytest.MonkeyPatch) -> None:
                 "summary": "Test issue",
                 "assignee": {"displayName": "Test User"},
                 "reporter": {"displayName": "Reporter User"},
+                # Description fallback with all 10 RAB fields — prevents blank-details validation failure in tests
+                "description": {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Date/Time: 2026-08-28\nRAB Approver: approver@example.com\nPR Link: https://example.com/pr\nPipeline Link: https://example.com/pipe\nDeveloper: dev\nTeam Lead: lead\nPM: pm\nQA: qa\nEnvironment: staging\nRollback/Mitigation: revert",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                "environment": "staging",
             },
         }
 

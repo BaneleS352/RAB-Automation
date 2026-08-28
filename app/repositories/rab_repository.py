@@ -15,6 +15,8 @@ ALLOWED_RAB_COLUMNS = frozenset({
     "sdl_approval_id", "sdm_approval_id",
     "creator", "assignee",
     "rejection_reason", "rejected_by", "meeting_needed",
+    # Rich Jira fields — persisted so dashboard no longer shows blank details
+    "description", "priority", "issuetype", "jira_status", "labels", "reporter", "jira_updated", "raw_fields",
 })
 
 ALLOWED_EVENT_COLUMNS = frozenset({"issue_key", "step", "action", "approver", "reason"})
@@ -34,31 +36,54 @@ class RabRepository:
     async def upsert_record(self, issue_key: str, data: dict) -> int:
         self._validate_columns(data, ALLOWED_RAB_COLUMNS)
         db = await get_db()
-        existing = await db.execute_fetchall(
-            "SELECT id FROM rab_records WHERE issue_key = ?", (issue_key,)
-        )
         now = datetime.now(timezone.utc).isoformat()
-        if existing:
-            sets = ", ".join(f"{k} = ?" for k in data)
-            values = list(data.values()) + [now, issue_key]
-            await db.execute(
-                f"UPDATE rab_records SET {sets}, updated_at = ? WHERE issue_key = ?",
-                values,
+        # Use INSERT ... ON CONFLICT to avoid race where two concurrent webhooks both see no existing and insert duplicate
+        # (previous SELECT-then-INSERT was racy; now that issue_key has UNIQUE index, duplicates would raise IntegrityError)
+        try:
+            # Try fast path: attempt UPDATE first; if row exists, update it
+            existing = await db.execute_fetchall(
+                "SELECT id FROM rab_records WHERE issue_key = ?", (issue_key,)
             )
-            row_id = existing[0][0]
-        else:
+            if existing:
+                sets = ", ".join(f"{k} = ?" for k in data)
+                values = list(data.values()) + [now, issue_key]
+                await db.execute(
+                    f"UPDATE rab_records SET {sets}, updated_at = ? WHERE issue_key = ?",
+                    values,
+                )
+                row_id = existing[0][0]
+                await db.commit()
+                return row_id
+            # No existing — try INSERT; handle race where another concurrent request inserted between SELECT and INSERT
             payload = dict(data)
             payload["issue_key"] = issue_key
             keys = ", ".join(payload.keys())
             placeholders = ", ".join("?" for _ in payload)
             values = list(payload.values())
-            cursor = await db.execute(
-                f"INSERT INTO rab_records ({keys}, created_at, updated_at) VALUES ({placeholders}, ?, ?)",
-                values + [now, now],
-            )
-            row_id = cursor.lastrowid
-        await db.commit()
-        return row_id
+            try:
+                cursor = await db.execute(
+                    f"INSERT INTO rab_records ({keys}, created_at, updated_at) VALUES ({placeholders}, ?, ?)",
+                    values + [now, now],
+                )
+                row_id = cursor.lastrowid
+                await db.commit()
+                return row_id
+            except IntegrityError:
+                # Race: another request inserted the same issue_key just now — fall back to UPDATE
+                await db.rollback()
+                sets = ", ".join(f"{k} = ?" for k in data)
+                values = list(data.values()) + [now, issue_key]
+                await db.execute(
+                    f"UPDATE rab_records SET {sets}, updated_at = ? WHERE issue_key = ?",
+                    values,
+                )
+                await db.commit()
+                # Fetch the id that won the race
+                row = await db.execute_fetchall("SELECT id FROM rab_records WHERE issue_key = ?", (issue_key,))
+                return row[0][0] if row else 0
+        except Exception:
+            await db.rollback()
+            raise
 
     async def record_validation(self, issue_key: str, valid: bool, detail: str = "") -> None:
         await self.upsert_record(issue_key, {

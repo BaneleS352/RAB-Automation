@@ -1,14 +1,74 @@
 """RAB Orchestrator – processes Jira events through the full RAB workflow (monitor mode)."""
 
 import asyncio
+import json
 import logging
 import uuid
 
+from app.config import get_settings
 from app.repositories.rab_repository import RabRepository
 from app.services.approval_service import ApprovalService, ApprovalStep
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
 from app.services.status_codes import FLOW_STATUSES, RabStatus
+
+
+def _adf_to_text(adf: object) -> str:
+    if not adf:
+        return ""
+    if isinstance(adf, str):
+        return adf
+    if isinstance(adf, dict):
+        parts: list[str] = []
+        for block in adf.get("content") or []:
+            if isinstance(block, dict):
+                for inline in block.get("content") or []:
+                    if isinstance(inline, dict) and inline.get("type") == "text":
+                        parts.append(inline.get("text") or "")
+                parts.append("\n")
+        text = "".join(parts).strip()
+        return text if text else json.dumps(adf)[:500] if adf else ""
+    return str(adf)[:1000]
+
+
+def _extract_rich_fields_orch(issue: dict, fv: FieldValidator) -> dict:
+    fields = issue.get("fields", {}) or {}
+    summary = fields.get("summary", "") or ""
+    description = _adf_to_text(fields.get("description"))
+    priority = (fields.get("priority") or {}).get("name", "") if isinstance(fields.get("priority"), dict) else ""
+    issuetype = (fields.get("issuetype") or {}).get("name", "") if isinstance(fields.get("issuetype"), dict) else ""
+    jira_status = (fields.get("status") or {}).get("name", "") if isinstance(fields.get("status"), dict) else ""
+    labels = ", ".join(fields.get("labels") or []) if isinstance(fields.get("labels"), list) else ""
+    reporter_data = fields.get("reporter") or {}
+    reporter = reporter_data.get("displayName") or reporter_data.get("accountId") or "" if isinstance(reporter_data, dict) else ""
+    creator_data = fields.get("creator") or fields.get("reporter") or {}
+    creator = creator_data.get("displayName") or creator_data.get("accountId") or "" if isinstance(creator_data, dict) else ""
+    assignee_data = fields.get("assignee") or {}
+    assignee = assignee_data.get("displayName") or assignee_data.get("accountId") or "" if isinstance(assignee_data, dict) else ""
+    jira_updated = fields.get("updated") or fields.get("created") or ""
+    # RAB snapshot for raw_fields
+    from app.services.field_validator import REQUIRED_FIELDS
+
+    rab_snapshot: dict[str, str | None] = {}
+    for _, key in REQUIRED_FIELDS:
+        try:
+            rab_snapshot[key] = fv.extract_field_value(issue, key)
+        except Exception:
+            rab_snapshot[key] = None
+    raw_fields = json.dumps({"rab_fields": rab_snapshot, "field_map": getattr(fv, "field_map", {}), "labels": labels}, ensure_ascii=False)[:4000]
+    return {
+        "summary": summary,
+        "description": description[:2000],
+        "priority": priority,
+        "issuetype": issuetype,
+        "jira_status": jira_status,
+        "labels": labels[:500],
+        "reporter": reporter,
+        "creator": creator,
+        "assignee": assignee,
+        "jira_updated": jira_updated,
+        "raw_fields": raw_fields,
+    }
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +123,19 @@ class RabOrchestrator:
                 issue_data = await self._fetch_issue(issue_key)
                 if issue_data:
                     validation = self.field_validator.validate(issue_data)
-                    summary = issue_data.get("fields", {}).get("summary", "") or ""
+                    rich = _extract_rich_fields_orch(issue_data, self.field_validator)
                     await self.rab_repo.upsert_record(issue_key, {
-                        "summary": summary,
+                        "summary": rich["summary"],
+                        "description": rich["description"],
+                        "priority": rich["priority"],
+                        "issuetype": rich["issuetype"],
+                        "jira_status": rich["jira_status"],
+                        "labels": rich["labels"],
+                        "reporter": rich["reporter"],
+                        "creator": rich["creator"],
+                        "assignee": rich["assignee"],
+                        "jira_updated": rich["jira_updated"],
+                        "raw_fields": rich["raw_fields"],
                         "validation_result": validation.detail if not validation.valid else "",
                         "status": "validated" if validation.valid else "validation_failed",
                     })
@@ -99,26 +169,37 @@ class RabOrchestrator:
                 return "error_fetching_issue_data"
 
             validation = self.field_validator.validate(issue_data)
-            fields = issue_data.get("fields", {})
-            creator_data = fields.get("creator") or fields.get("reporter") or {}
-            assignee_data = fields.get("assignee") or {}
+            rich = _extract_rich_fields_orch(issue_data, self.field_validator)
+            # Persist all rich Jira details so dashboard no longer shows blank; previously only creator/assignee were saved
             await self.rab_repo.upsert_record(issue_key, {
-                "creator": creator_data.get("displayName") or creator_data.get("accountId") or "",
-                "assignee": assignee_data.get("displayName") or assignee_data.get("accountId") or "",
+                "summary": rich["summary"],
+                "description": rich["description"],
+                "priority": rich["priority"],
+                "issuetype": rich["issuetype"],
+                "jira_status": rich["jira_status"],
+                "labels": rich["labels"],
+                "reporter": rich["reporter"],
+                "creator": rich["creator"],
+                "assignee": rich["assignee"],
+                "jira_updated": rich["jira_updated"],
+                "raw_fields": rich["raw_fields"],
             })
             await self.rab_repo.record_validation(issue_key, validation.valid, validation.detail)
             if not validation.valid:
                 msg = f"Validation failed.\n\n{validation.detail}\n\nPlease update the ticket and trigger re-check."
                 await self._add_comment(issue_key, f"RAB Automation: {msg}")
                 await self._send_card("Validation Failed")
+                await self._maybe_transition(issue_key, "JIRA_TRANSITION_REJECT")
                 return f"validation_failed: {validation.detail}"
 
+            await self._maybe_transition(issue_key, "JIRA_TRANSITION_VALIDATE")
             await self._add_comment(issue_key, "RAB Automation: Ticket validation passed — starting approvals.")
             await self._send_card("Validation Passed")
 
             summary = issue_data.get("fields", {}).get("summary", "No summary")
             self.approval_service.create_approval(issue_key, summary)
 
+            await self._maybe_transition(issue_key, "JIRA_TRANSITION_REQUEST_APPROVAL")
             await self._request_approval(issue_key, summary, ApprovalStep.SDL)
             return "approval_requested_sdl"
 
@@ -134,6 +215,19 @@ class RabOrchestrator:
             await self.jira_client.add_comment(issue_key, body)
         except JiraClientError as e:
             logger.error("Failed to add comment for %s: %s", issue_key, e)
+
+    async def _maybe_transition(self, issue_key: str, transition_env: str) -> None:
+        """Attempt a Jira workflow transition if its ID is configured; otherwise no-op (previously dead code)."""
+        settings = get_settings()
+        tid = getattr(settings, transition_env, "") or ""
+        if not tid:
+            logger.debug("Skipping Jira transition %s for %s — %s not configured (was dead code before)", transition_env, issue_key, transition_env)
+            return
+        try:
+            await self.jira_client.transition_issue(issue_key, tid)
+            logger.info("Jira transition %s (%s) applied to %s", transition_env, tid, issue_key)
+        except JiraClientError as e:
+            logger.warning("Jira transition %s for %s failed (id=%s): %s", transition_env, issue_key, tid, e)
 
     async def _send_card(self, title: str, card: dict | None = None) -> None:
         # Monitor mode — no Teams delivery; log for audit trail
@@ -192,6 +286,7 @@ class RabOrchestrator:
 
             if decision == "rejected":
                 rejected_by = result["rejected_by"]
+                await self._maybe_transition(issue_key, "JIRA_TRANSITION_REJECT")
                 await self._add_comment(
                     issue_key,
                     f"RAB Automation: {rejected_by} rejected.\nReason: {reason or 'No reason provided.'}",
@@ -200,11 +295,13 @@ class RabOrchestrator:
                 return {"status": "rejected", "rejected_by": rejected_by, "detail": f"Rejected by {rejected_by}"}
 
             if decision == "approved":
+                await self._maybe_transition(issue_key, "JIRA_TRANSITION_APPROVE")
                 await self._add_comment(issue_key, f"RAB Automation: {step} approved.")
                 await self._send_card(f"Approved by {step}: {issue_key}")
 
                 next_step = result.get("next_step")
                 if next_step == ApprovalStep.SDM.value:
+                    await self._maybe_transition(issue_key, "JIRA_TRANSITION_REQUEST_APPROVAL")
                     await self._request_approval(issue_key, state.summary, ApprovalStep.SDM)
                     return {"status": "approved", "detail": "SDL approved — SDM approval requested", "next": "sdm"}
                 else:

@@ -49,10 +49,23 @@ class MetricsMiddleware:
             return
         start = time.time()
         _requests_total += 1
+        status_code: int | None = None
+
+        async def send_wrapper(message):
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = message.get("status", 200)
+                # Count 4xx/5xx as failures — previously only exceptions were counted (silent undercount similar to blank-details)
+                if status_code >= 400:
+                    global _failures_total
+                    _failures_total += 1
+            await send(message)
+
         try:
-            await self.app(scope, receive, send)
+            await self.app(scope, receive, send_wrapper)
         except Exception:
-            _failures_total += 1
+            if status_code is None or status_code < 400:
+                _failures_total += 1
             raise
         finally:
             _request_duration_sum += time.time() - start

@@ -15,6 +15,23 @@ class StubJiraClient:
                 "summary": "Test release",
                 "assignee": {"displayName": "Demo Dev"},
                 "reporter": {"displayName": "Demo PM"},
+                # Description fallback — fixes blank-details: provides all 10 RAB fields when JIRA_FIELD_* empty
+                "description": {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Date/Time: 2026-08-28\nRAB Approver: approver@example.com\nPR Link: https://example.com/pr\nPipeline Link: https://example.com/pipe\nDeveloper: dev\nTeam Lead: lead\nPM: pm\nQA: qa\nEnvironment: staging\nRollback/Mitigation: revert",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                "environment": "staging",
             },
         }
 

@@ -28,13 +28,11 @@ Returns service status plus per-integration connectivity.
   "status": "ok",
   "service": "rab-automation",
   "environment": "local",
-  "jira": { "connected": true, "details": "Jira API is reachable and authenticated." },
-  "azure_devops": { "connected": false, "details": "Azure DevOps is not configured." },
-  "teams": { "connected": false, "details": "Teams / Azure Bot is not configured." }
+  "jira": { "connected": true, "details": "Jira API is reachable and authenticated." }
 }
 ```
 
-`connected` is a boolean; `details` explains the current state.
+`connected` is a boolean; `details` explains the current state. When `JIRA_FIELD_*`/`JIRA_PROJECT_KEY`/`JIRA_TRANSITION_*` are empty, `details` appends `Config warnings: ...` (same silent no-op class as the former blank-details bug — now surfaced).
 
 ### `GET /metrics`
 

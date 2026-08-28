@@ -59,32 +59,53 @@ ADF_PARAGRAPH = lambda text: {
     "content": [{"type": "paragraph", "content": [{"type": "text", "text": text}]}],
 }
 
+# RAB details block embedded in description so the dashboard (which now persists description)
+# shows non-blank details even though JIRA_FIELD_* custom fields are not configured in this Jira instance.
+_RAB_DETAILS_BLOCK = """RAB Details (embedded in description so dashboard shows it):
+- Date/Time: {date_time}
+- RAB Approver: {rab_approver}
+- PR Link: {pr_link}
+- Pipeline Link: {pipeline_link}
+- Developer: {developer}
+- Team Lead: {team_lead}
+- PM: {pm}
+- QA: {qa}
+- Environment: {environment}
+- Rollback/Mitigation: {rollback}
+"""
+
 # Synthetic ticket definitions covering different RAB validation scenarios
+# Each now includes a rich description so previously-blank dashboard detail is populated.
 TICKET_TEMPLATES = [
     {
         "summary": "RAB-AUTO validated ticket — should pass",
         "description": "All fields present. Created by populate_jira.py to verify Jira pull works. Has assignee, reporter, summary.",
         "labels": ["rab-auto", "validated"],
+        "priority": "High",
     },
     {
         "summary": "RAB-AUTO release for pipeline v1.2",
-        "description": "PR: https://github.com/example/repo/pull/42\nPipeline: https://dev.azure.com/example/pipeline/99\nEnv: staging\nRollback: revert commit.",
+        "description": "Release candidate v1.2 — see RAB details below.",
         "labels": ["rab-auto"],
+        "priority": "High",
     },
     {
         "summary": "RAB-AUTO hotfix — missing optional fields",
-        "description": "Minimal description — used to test field_validator with empty JIRA_FIELD_* mappings (should still pass as skipped).",
+        "description": "Minimal hotfix ticket — used to test aging/validation display.",
         "labels": ["rab-auto", "minimal"],
+        "priority": "Medium",
     },
     {
         "summary": "RAB-AUTO regression test ticket",
         "description": "Created to verify the sync endpoint POST /rab/sync pulls issues regardless of webhook.",
         "labels": ["rab-auto", "sync-test"],
+        "priority": "Medium",
     },
     {
         "summary": "RAB-AUTO aging ticket — will be backdated in demo",
         "description": "Used to test aging approvals KPIs on the dashboard.",
         "labels": ["rab-auto", "aging"],
+        "priority": "Low",
     },
 ]
 
@@ -127,7 +148,7 @@ async def check_connection(client: httpx.AsyncClient) -> dict:
     return out
 
 
-async def create_issue(client: httpx.AsyncClient, project_key: str, summary: str, description: str, labels=None, issue_type: str = "Task", assignee_account_id: str | None = None) -> dict:
+async def create_issue(client: httpx.AsyncClient, project_key: str, summary: str, description: str, labels=None, issue_type: str = "Task", assignee_account_id: str | None = None, priority: str | None = None) -> dict:
     base = _base()
     auth = _auth()
     payload = {
@@ -143,6 +164,9 @@ async def create_issue(client: httpx.AsyncClient, project_key: str, summary: str
     if assignee_account_id:
         # Use accountId — service_desk projects accept assignee on Task
         payload["fields"]["assignee"] = {"accountId": assignee_account_id}
+    if priority:
+        # Priority is a standard field; valid names: Highest, High, Medium, Low, Lowest (depends on instance)
+        payload["fields"]["priority"] = {"name": priority}
     r = await client.post(f"{base}/rest/api/3/issue", auth=auth, headers={"Accept": "application/json", "Content-Type": "application/json"}, json=payload)
     if r.status_code not in (200, 201):
         print(f"[FAIL] Create issue project={project_key} summary={summary!r} -> HTTP {r.status_code}: {r.text[:600]}")
@@ -367,9 +391,22 @@ async def main_async(args: argparse.Namespace) -> None:
                 # Make summary unique with timestamp suffix
                 ts = datetime.now(timezone.utc).strftime("%H%M%S")
                 summary = f"{args.prefix} {i+1}/{args.count} — {tpl['summary']} [{ts}]"
-                description = tpl["description"] + f"\n\nCreated: {datetime.now(timezone.utc).isoformat()}  template={i % len(TICKET_TEMPLATES)}"
+                # Build rich description that includes all RAB fields so the dashboard detail is not blank
+                rab_block = _RAB_DETAILS_BLOCK.format(
+                    date_time=datetime.now(timezone.utc).isoformat(),
+                    rab_approver="sdl@example.com",
+                    pr_link="https://github.com/example/repo/pull/42",
+                    pipeline_link="https://dev.azure.com/example/pipeline/99",
+                    developer="dev@example.com",
+                    team_lead="lead@example.com",
+                    pm="pm@example.com",
+                    qa="qa@example.com",
+                    environment="staging" if i % 2 == 0 else "production",
+                    rollback="Revert commit / redeploy previous artifact",
+                )
+                description = tpl["description"] + "\n\n" + rab_block + f"\nCreated: {datetime.now(timezone.utc).isoformat()}  template={i % len(TICKET_TEMPLATES)}  assignee_set={'yes' if assignee_id else 'no'}"
                 try:
-                    data = await create_issue(client, args.project, summary, description, labels=tpl.get("labels"), assignee_account_id=assignee_id)
+                    data = await create_issue(client, args.project, summary, description, labels=tpl.get("labels"), assignee_account_id=assignee_id, priority=tpl.get("priority"))
                     created_keys.append(data["key"])
                 except Exception as e:
                     print(f"  [ERROR] Failed to create issue {i+1}: {e}")

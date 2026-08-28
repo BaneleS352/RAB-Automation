@@ -44,6 +44,27 @@ def _require_feature(request: Request, feature: str) -> None:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
+def _config_warnings() -> list[str]:
+    from app.config import get_settings
+    s = get_settings()
+    warns: list[str] = []
+    if not s.JIRA_PROJECT_KEY:
+        warns.append("JIRA_PROJECT_KEY empty — sync falls back to unfiltered 'ORDER BY updated DESC' (cross-project, first 100)")
+    field_vars = [
+        "JIRA_FIELD_DATE_TIME", "JIRA_FIELD_RAB_APPROVER", "JIRA_FIELD_PR_LINK", "JIRA_FIELD_PIPELINE_LINK",
+        "JIRA_FIELD_DEVELOPER", "JIRA_FIELD_TEAM_LEAD", "JIRA_FIELD_PM", "JIRA_FIELD_QA",
+        "JIRA_FIELD_ENVIRONMENT", "JIRA_FIELD_ROLLBACK_DETAILS",
+    ]
+    missing = sum(1 for v in field_vars if not getattr(s, v, ""))
+    if missing >= 8:
+        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — validator now uses description fallback (was previously blank); set customfield IDs to use native fields")
+    elif missing:
+        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — description fallback active for those fields")
+    if not any([s.JIRA_TRANSITION_VALIDATE, s.JIRA_TRANSITION_REQUEST_APPROVAL, s.JIRA_TRANSITION_APPROVE, s.JIRA_TRANSITION_REJECT]):
+        warns.append("All JIRA_TRANSITION_* empty — Jira issue status will never transition (was dead code before fix)")
+    return warns
+
+
 async def _check_connection_status() -> dict:
     """Connection status for Jira, cached to avoid hammering
     the external API on every page load / 30s auto-refresh."""
@@ -57,9 +78,14 @@ async def _check_connection_status() -> dict:
         if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
             return _health_cache["services"]
         jira_status = await _jira.check_connection()
+        details = jira_status.get("details", "Unknown")
+        warnings = _config_warnings()
+        if warnings:
+            details += " | Config warnings: " + "; ".join(warnings)
 
         services = {
-            "jira": {"connected": jira_status.get("connected", False), "details": jira_status.get("details", "Unknown")},
+            "jira": {"connected": jira_status.get("connected", False), "details": details},
+            "_warnings": warnings,
         }
         _health_cache["at"] = now
         _health_cache["services"] = services

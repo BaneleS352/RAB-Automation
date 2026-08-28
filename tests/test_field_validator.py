@@ -51,10 +51,39 @@ class TestFieldValidator:
         assert "PR Link" in result.missing_fields
 
     def test_no_mappings_configured(self, monkeypatch):
+        # When no JIRA_FIELD_* mappings are set, validator now falls back to parsing description/environment.
+        # With only assignee/reporter and no description block, all 10 custom fields are missing → should fail (was previously silent skip → blank)
         validator = FieldValidator()
         fields = {
             "assignee": {"displayName": "Alice"},
             "reporter": {"displayName": "Bob"},
+        }
+        result = validator.validate({"fields": fields})
+        assert result.valid is False
+        assert "PR Link" in result.missing_fields
+
+    def test_no_mappings_but_description_fallback_passes(self, monkeypatch):
+        # New fallback: when JIRA_FIELD_* empty, description RAB block satisfies validation (fixes blank-details without customfields)
+        validator = FieldValidator()
+        fields = {
+            "assignee": {"displayName": "Alice"},
+            "reporter": {"displayName": "Bob"},
+            "description": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "RAB Details:\n- Date/Time: 2026-08-28T11:00:00Z\n- RAB Approver: approver@example.com\n- PR Link: https://github.com/example/pr/1\n- Pipeline Link: https://pipeline.example.com/1\n- Developer: dev@example.com\n- Team Lead: lead@example.com\n- PM: pm@example.com\n- QA: qa@example.com\n- Environment: staging\n- Rollback/Mitigation: revert",
+                            }
+                        ],
+                    }
+                ],
+            },
+            "environment": "staging",  # also satisfies via standard field fallback
         }
         result = validator.validate({"fields": fields})
         assert result.valid is True
@@ -79,13 +108,22 @@ class TestFieldValidator:
     def test_person_object_field_is_normalized(self, monkeypatch):
         monkeypatch.setenv("JIRA_FIELD_RAB_APPROVER", "customfield_rab_approver")
         validator = FieldValidator()
+        # Provide description fallback for the other 9 required fields (was previously skipped → blank)
         fields = {
             "assignee": {"displayName": "Alice"},
             "reporter": {"displayName": "Bob"},
             "customfield_rab_approver": {"displayName": "Charlie"},
+            "description": {
+                "type": "doc",
+                "version": 1,
+                "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Date/Time: 2026-08-28\nPR Link: https://example.com/pr\nPipeline Link: https://example.com/pipe\nDeveloper: dev\nTeam Lead: lead\nPM: pm\nQA: qa\nEnvironment: staging\nRollback/Mitigation: revert"}]}],
+            },
+            "environment": "staging",
         }
         result = validator.validate({"fields": fields})
         assert result.valid is True
+        # Also verify normalization extracts displayName
+        assert validator.extract_field_value({"fields": fields}, "rab_approver") == "Charlie"
 
     def test_empty_person_object_field_counts_as_missing(self, monkeypatch):
         monkeypatch.setenv("JIRA_FIELD_RAB_APPROVER", "customfield_rab_approver")
@@ -106,9 +144,15 @@ class TestFieldValidator:
             "assignee": {"displayName": "Alice"},
             "reporter": {"displayName": "Bob"},
             "customfield_environment": {"value": "Production"},
+            "description": {
+                "type": "doc",
+                "version": 1,
+                "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Date/Time: 2026-08-28\nRAB Approver: approver\nPR Link: https://example.com/pr\nPipeline Link: https://example.com/pipe\nDeveloper: dev\nTeam Lead: lead\nPM: pm\nQA: qa\nRollback/Mitigation: revert"}]}],
+            },
         }
         result = validator.validate({"fields": fields})
         assert result.valid is True
+        assert validator.extract_field_value({"fields": fields}, "environment") == "Production"
 
     def test_multi_value_list_is_joined(self, monkeypatch):
         monkeypatch.setenv("JIRA_FIELD_ENVIRONMENT", "customfield_environment")
@@ -122,6 +166,11 @@ class TestFieldValidator:
                 {"value": ""},
                 None,
             ],
+            "description": {
+                "type": "doc",
+                "version": 1,
+                "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Date/Time: 2026-08-28\nRAB Approver: approver\nPR Link: https://example.com/pr\nPipeline Link: https://example.com/pipe\nDeveloper: dev\nTeam Lead: lead\nPM: pm\nQA: qa\nRollback/Mitigation: revert"}]}],
+            },
         }
         result = validator.validate({"fields": fields})
         assert result.valid is True

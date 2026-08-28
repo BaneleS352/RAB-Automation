@@ -25,8 +25,14 @@
                 <span class="detail-label">Summary</span>
                 <span style="font-weight:500;">{{ record.summary or '—' }}</span>
             </div>
-            <div class="detail-item"><span class="detail-label">Ticket Creator</span><span>{{ record.creator or 'Not captured' }}</span></div>
+            <div class="detail-item"><span class="detail-label">Ticket Creator</span><span>{{ record.creator or '—' }}</span></div>
+            <div class="detail-item"><span class="detail-label">Reporter</span><span>{{ record.reporter or record.creator or '—' }}</span></div>
             <div class="detail-item"><span class="detail-label">Assignee</span><span>{{ record.assignee or 'Unassigned' }}</span></div>
+            <div class="detail-item"><span class="detail-label">Jira Status</span><span class="badge">{{ record.jira_status or '—' }}</span></div>
+            <div class="detail-item"><span class="detail-label">Issue Type</span><span>{{ record.issuetype or '—' }}</span></div>
+            <div class="detail-item"><span class="detail-label">Priority</span><span>{{ record.priority or '—' }}</span></div>
+            <div class="detail-item"><span class="detail-label">Labels</span><span>{{ record.labels or '—' }}</span></div>
+            <div class="detail-item"><span class="detail-label">Jira Updated</span><span style="font-family:'JetBrains Mono', monospace; font-size:0.84rem;">{{ record.jira_updated[:19].replace('T',' ') if record.jira_updated else '—' }}</span></div>
             <div class="detail-item">
                 <span class="detail-label">SDL Approval</span>
                 <span class="badge badge-{{ record.sdl_approval }}">{{ record.sdl_approval }}</span>
@@ -56,8 +62,18 @@
                 <span style="font-family:'JetBrains Mono', monospace; font-size:0.84rem;">{{ record.updated_at[:19] | replace('T', ' ') }}</span>
             </div>
             <div class="detail-item detail-item-full">
+                <span class="detail-label">Description</span>
+                <span style="white-space:pre-wrap; max-height:220px; overflow:auto; display:block; background:var(--surface-2, #f8f8f8); padding:0.6rem; border-radius:6px;">{{ record.description or '— (blank: Jira description is empty or was not synced — re-sync to populate)' }}</span>
+            </div>
+            <div class="detail-item detail-item-full">
                 <span class="detail-label">Validation Result</span>
-                <span style="white-space:pre-wrap;">{{ record.validation_result or '—' }}</span>
+                <span style="white-space:pre-wrap;">{{ record.validation_result or 'All required fields are present.' }}</span>
+                {% if record.raw_fields %}
+                <details style="margin-top:0.6rem;"><summary style="cursor:pointer; font-size:0.84rem; color:var(--muted);">Show RAB field snapshot (why details may appear blank)</summary>
+                    <pre style="white-space:pre-wrap; font-size:0.78rem; background:var(--surface-2, #f5f5f5); padding:0.6rem; border-radius:6px; margin-top:0.4rem; max-height:260px; overflow:auto;">{{ record.raw_fields }}</pre>
+                    <p style="font-size:0.78rem; color:var(--muted); margin-top:0.4rem;">Blank RAB fields (PR Link, Pipeline Link, RAB Approver, Developer, Team Lead, PM, QA, Environment, Rollback, Date/Time) mean their JIRA_FIELD_* env mappings are empty (<code>.env</code>) so the validator skips them — not that Jira rejected the sync. Set <code>JIRA_FIELD_PR_LINK=customfield_XXXX</code> etc. and re-sync to populate those columns, or store those values in the Jira description/labels which are now persisted and shown above.</p>
+                </details>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -85,7 +101,9 @@
 
 <div class="detail-columns">
     <div><h2 class="section-title">People involved</h2><div class="people-card">
-        <div class="person-row"><span class="person-avatar">C</span><div><strong>Ticket creator</strong><small>Not captured in the current audit schema</small></div><span class="badge badge-none">Unavailable</span></div>
+        <div class="person-row"><span class="person-avatar">C</span><div><strong>Ticket creator</strong><small>{{ record.creator or record.reporter or 'Unknown' }}</small></div><span class="badge badge-none">{{ record.creator and 'captured' or '—' }}</span></div>
+        <div class="person-row"><span class="person-avatar">R</span><div><strong>Reporter</strong><small>{{ record.reporter or record.creator or 'Unknown' }}</small></div><span class="badge badge-none">{{ record.reporter and 'captured' or '—' }}</span></div>
+        <div class="person-row"><span class="person-avatar">A</span><div><strong>Assignee</strong><small>{{ record.assignee or 'Unassigned' }}</small></div><span class="badge badge-{{ record.assignee and 'approved' or 'none' }}">{{ record.assignee and 'assigned' or 'unassigned' }}</span></div>
         <div class="person-row"><span class="person-avatar">S</span><div><strong>SDL approver</strong><small>{% set sdl = events | selectattr('step', 'equalto', 'SDL') | list %}{% if sdl %}{{ sdl[-1].approver or 'Decision recorded without a name' }}{% else %}No decision recorded{% endif %}</small></div><span class="badge badge-{{ record.sdl_approval }}">{{ record.sdl_approval }}</span></div>
         <div class="person-row"><span class="person-avatar">S</span><div><strong>SDM approver</strong><small>{% set sdm = events | selectattr('step', 'equalto', 'SDM') | list %}{% if sdm %}{{ sdm[-1].approver or 'Decision recorded without a name' }}{% else %}No decision recorded{% endif %}</small></div><span class="badge badge-{{ record.sdm_approval }}">{{ record.sdm_approval }}</span></div>
     </div></div>
@@ -94,7 +112,7 @@
         {% for e in events %}<div class="activity-row"><span class="activity-dot activity-{{ e.action }}"></span><div><strong>{{ e.step }} {{ e.action }}</strong><small>{{ e.created_at[:19] | replace('T', ' ') }}{% if e.approver %} · {{ e.approver }}{% endif %}</small></div></div>{% endfor %}
         {% for e in webhook_events[:5] %}<div class="activity-row"><span class="activity-dot activity-webhook"></span><div><strong>{{ e.event_type or 'Webhook received' }}</strong><small>{{ e.created_at[:19] | replace('T', ' ') }} · {{ e.status }}</small></div></div>{% endfor %}
         {% for e in field_changes %}<div class="activity-row"><span class="activity-dot activity-change"></span><div><strong>{{ e.field }} changed</strong><small>{{ e.from_value or 'empty' }} → {{ e.to_value or 'empty' }}{% if e.author %} · {{ e.author }}{% endif %}</small></div></div>{% endfor %}
-        <p class="audit-note">Field-level Jira edits and the original creator are not persisted yet. This view reflects webhook deliveries and approval decisions currently stored by RAB.</p>
+        <p class="audit-note">Jira description, priority, issue type, status, labels, reporter and creator are now persisted on sync (previously only summary/assignee/creator). Blank fields above mean Jira returned empty for that issue — re-sync after updating Jira. RAB-specific fields (PR Link etc.) appear blank when their <code>JIRA_FIELD_*</code> mappings are unset.</p>
     </div></div>
 </div>
 <p class="muted" style="margin-top:1rem;"><a href="/rab/records/{{ record.issue_key }}">View JSON API record →</a> • <a href="/dashboard/records">Back to issues</a></p>
