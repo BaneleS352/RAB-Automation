@@ -140,19 +140,26 @@ class JiraClient:
         data = await self._get(f"/rest/api/3/issue/{issue_key}/remotelink")
         return data if isinstance(data, list) else []
 
-    async def search_issues(self, jql: str, max_results: int = 50, next_page_token: str | None = None) -> dict:
+    async def search_issues(self, jql: str, max_results: int = 50, next_page_token: str | None = None, fields: list[str] | None = None) -> dict:
         """Search Jira issues via enhanced search (JQL). Handles pagination via nextPageToken."""
+        # Request all fields so callers (sync, list_project_issues) receive summary/status/assignee etc.
+        # Without explicit fields the enhanced search only returns id, which breaks validation/sync.
+        if fields is None:
+            fields = ["*all"]
         params: dict[str, Any] = {"jql": jql, "maxResults": max_results}
         if next_page_token:
             params["nextPageToken"] = next_page_token
         # Try enhanced search POST first, fall back to GET /search on 404 only
         try:
-            return await self._post("/rest/api/3/search/jql", {"jql": jql, "maxResults": max_results, **({"nextPageToken": next_page_token} if next_page_token else {})})
+            body: dict[str, Any] = {"jql": jql, "maxResults": max_results, "fields": fields}
+            if next_page_token:
+                body["nextPageToken"] = next_page_token
+            return await self._post("/rest/api/3/search/jql", body)
         except JiraClientError as e:
             if "404" not in str(e) and "HTTP 404" not in str(e):
                 raise
             # Fallback: legacy GET /search uses startAt for pagination
-            fallback_params: dict[str, Any] = {"jql": jql, "maxResults": max_results}
+            fallback_params: dict[str, Any] = {"jql": jql, "maxResults": max_results, "fields": ",".join(fields)}
             if next_page_token and next_page_token.isdigit():
                 fallback_params["startAt"] = int(next_page_token)
             elif next_page_token:
