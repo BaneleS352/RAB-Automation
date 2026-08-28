@@ -1,6 +1,8 @@
 """Jira webhook endpoint with idempotency support."""
 
 import asyncio
+import hashlib
+import json
 import logging
 import threading
 import uuid
@@ -73,7 +75,10 @@ async def _process_webhook(
 
     logger.info("Received Jira webhook: issue_key=%s, event=%s, idempotency_key=%s", issue_key, payload.webhookEvent, event_id)
 
-    await rab_repo.record_field_changes(issue_key, payload.model_extra.get("changelog"))
+    changelog = payload.model_extra.get("changelog")
+    if not changelog or not isinstance(changelog.get("items"), list) or not changelog.get("items"):
+        logger.info("Webhook for %s has no changelog (Jira webhook may not be configured to send changelog — field_changes will be empty; configure Jira webhook to 'Send changelog' or rely on sync)", issue_key)
+    await rab_repo.record_field_changes(issue_key, changelog)
 
     result = await orchestrator.handle_jira_event(
         issue_key=issue_key,
@@ -105,11 +110,24 @@ async def jira_webhook(
         logger.warning("Webhook payload missing Jira issue key")
         raise MissingIssueKeyError()
 
-    event_id = x_idempotency_key or str(uuid.uuid4())
-
+    # Systemic fix: previously when X-Idempotency-Key was absent (Jira retries don't send it),
+    # every retry got a random UUID and was processed twice (silent duplicate work, similar to blank-details silent skip).
+    # Now we derive a deterministic event_id from the payload hash so retries deduplicate, but we still treat it as keyed
+    # so the second delivery returns idempotent_replay=True instead of re-executing the workflow.
     if x_idempotency_key:
-        lock = _get_event_lock(event_id)
-        async with lock:
-            return await _process_webhook(event_id, issue_key, payload, keyed=True)
+        event_id = x_idempotency_key
+        keyed = True
+    else:
+        # Deterministic fallback: hash of the canonical payload (covers issue key, event type, changelog) — retries with identical payload dedupe,
+        # distinct updates get distinct hashes and are processed separately.
+        try:
+            canonical = json.dumps(payload.model_dump(), sort_keys=True, default=str)
+            digest = hashlib.sha256(canonical.encode()).hexdigest()[:32]
+            event_id = f"auto:{digest}"
+        except Exception:
+            event_id = str(uuid.uuid4())
+        keyed = True  # treat deterministic fallback as keyed so duplicates are detected via record_webhook_event
 
-    return await _process_webhook(event_id, issue_key, payload, keyed=False)
+    lock = _get_event_lock(event_id)
+    async with lock:
+        return await _process_webhook(event_id, issue_key, payload, keyed=keyed)

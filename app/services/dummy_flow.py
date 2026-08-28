@@ -24,18 +24,34 @@ class StubJiraClient:
 
     async def get_issue(self, issue_key: str) -> dict:
         logger.info("[DUMMY] Fetching issue %s from stub Jira", issue_key)
+        # Return rich fields so dashboard no longer shows blank details for dummy tickets (same fix as real Jira sync)
         return {
             "key": self.issue_key,
             "fields": {
                 "summary": self.summary,
+                "description": {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [{"type": "paragraph", "content": [{"type": "text", "text": f"{self.summary} — demo ticket with rich details (priority High, labels demo)"}]}],
+                },
                 "assignee": {"displayName": "Demo Dev"},
                 "reporter": {"displayName": "Demo PM"},
+                "creator": {"displayName": "Demo Creator"},
+                "priority": {"name": "High"},
+                "issuetype": {"name": "Task"},
+                "status": {"name": "Open"},
+                "labels": ["demo", "rab-auto"],
+                "updated": "2026-08-28T11:45:00.000+0000",
             },
         }
 
     async def add_comment(self, issue_key: str, body: str) -> dict:
         first_line = body.splitlines()[0] if body else ""
         logger.info("[DUMMY] Jira comment on %s: %s", issue_key, first_line)
+        return {}
+
+    async def transition_issue(self, issue_key: str, transition_id: str) -> dict:
+        logger.info("[DUMMY] Jira transition on %s: id=%s (no-op stub)", issue_key, transition_id)
         return {}
 
 

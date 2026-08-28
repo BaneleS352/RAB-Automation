@@ -177,6 +177,7 @@ class JiraClient:
             issues = data.get("issues", [])
             all_issues.extend(issues)
             if len(all_issues) >= 1000:  # safety cap
+                logger.warning("list_project_issues hit safety cap 1000 for project %s — truncated; remaining issues not synced (previously silent truncation)", project_key)
                 break
             # Enhanced search uses nextPageToken
             next_token = data.get("nextPageToken")

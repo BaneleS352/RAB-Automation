@@ -79,6 +79,38 @@ async def _migrate(db: aiosqlite.Connection) -> None:
         await db.execute("ALTER TABLE rab_records ADD COLUMN creator TEXT DEFAULT ''")
     if "assignee" not in columns:
         await db.execute("ALTER TABLE rab_records ADD COLUMN assignee TEXT DEFAULT ''")
+    # Rich Jira fields — added to fix blank-details (issue persist only summary/creator/assignee)
+    if "description" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN description TEXT DEFAULT ''")
+    if "priority" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN priority TEXT DEFAULT ''")
+    if "issuetype" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN issuetype TEXT DEFAULT ''")
+    if "jira_status" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN jira_status TEXT DEFAULT ''")
+    if "labels" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN labels TEXT DEFAULT ''")
+    if "reporter" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN reporter TEXT DEFAULT ''")
+    if "jira_updated" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN jira_updated TEXT DEFAULT ''")
+    if "raw_fields" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN raw_fields TEXT DEFAULT ''")
+    # Systemic fix: issue_key should be unique; previously only a non-unique index existed,
+    # allowing silent duplicate rows on concurrent webhooks (similar to blank-details silent duplication).
+    # Deduplicate keeping latest row, then enforce uniqueness.
+    try:
+        dups = await db.execute_fetchall("SELECT issue_key, COUNT(*) c FROM rab_records GROUP BY issue_key HAVING c > 1")
+        for row in dups:
+            key = row["issue_key"]
+            keep = await db.execute_fetchall("SELECT id FROM rab_records WHERE issue_key = ? ORDER BY id DESC LIMIT 1", (key,))
+            keep_id = keep[0]["id"] if keep else None
+            if keep_id:
+                await db.execute("DELETE FROM rab_records WHERE issue_key = ? AND id != ?", (key, keep_id))
+                logger.warning("Deduplicated rab_records for %s, kept id %s", key, keep_id)
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS uidx_rab_issue_key ON rab_records(issue_key)")
+    except Exception as e:
+        logger.warning("Could not create unique index on rab_records.issue_key: %s", e)
     await db.execute("""CREATE TABLE IF NOT EXISTS field_change_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT, issue_key TEXT NOT NULL, field TEXT NOT NULL,
         from_value TEXT DEFAULT '', to_value TEXT DEFAULT '', author TEXT DEFAULT '',
@@ -102,6 +134,14 @@ async def init_db() -> None:
             rejection_reason TEXT DEFAULT '',
             rejected_by     TEXT DEFAULT '',
             meeting_needed  INTEGER DEFAULT 0,
+            description     TEXT DEFAULT '',
+            priority        TEXT DEFAULT '',
+            issuetype       TEXT DEFAULT '',
+            jira_status     TEXT DEFAULT '',
+            labels          TEXT DEFAULT '',
+            reporter        TEXT DEFAULT '',
+            jira_updated    TEXT DEFAULT '',
+            raw_fields      TEXT DEFAULT '',
             created_at      TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
         );
