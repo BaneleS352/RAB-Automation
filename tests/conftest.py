@@ -13,12 +13,26 @@ os.environ["DATABASE_PATH"] = os.path.join(
     tempfile.gettempdir(), f"rab_pytest_{uuid.uuid4().hex}.db"
 )
 
+from app.config import get_settings
 from app.database import DB_PATH, init_db, close_db
 from app.api.webhooks import orchestrator
 from app.services.approval_service import ApprovalService
 
 
 logger = logging.getLogger(__name__)
+
+
+@pytest.fixture(autouse=True)
+def _clear_settings_cache() -> None:
+    try:
+        get_settings.cache_clear()  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    yield
+    try:
+        get_settings.cache_clear()  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
 
 
 @pytest.fixture(autouse=True)

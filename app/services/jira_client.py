@@ -15,8 +15,8 @@ _RETRY_BACKOFF = 0.25
 
 logger = logging.getLogger(__name__)
 
-_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-\d+$")
-_PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+$")
+_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
+_PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+$")
 
 
 def _validate_issue_key(key: str) -> None:
@@ -31,7 +31,10 @@ def _validate_project_key(key: str) -> None:
 
 class JiraClientError(Exception):
     """Raised when the Jira API request fails."""
-    pass
+
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class JiraClient:
@@ -72,28 +75,32 @@ class JiraClient:
 
     async def _request(self, method: str, url: str, *, params: dict | None = None, body: dict | None = None) -> dict:
         """Perform a bounded retry for transient HTTP/network failures."""
-        for attempt in range(_MAX_RETRIES + 1):
-            try:
-                async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
+        # Reuse one client across retries to avoid opening a new TCP connection per attempt
+        async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
+            for attempt in range(_MAX_RETRIES + 1):
+                try:
                     resp = await client.request(
                         method, url, auth=self._auth(), headers=self._auth_headers(),
                         params=params, json=body,
                     )
-                if resp.status_code == 429 or 500 <= resp.status_code < 600:
+                    if resp.status_code == 429 or 500 <= resp.status_code < 600:
+                        if attempt < _MAX_RETRIES:
+                            retry_after = resp.headers.get("Retry-After")
+                            try:
+                                delay = float(retry_after) if retry_after else _RETRY_BACKOFF * (2 ** attempt)
+                            except (TypeError, ValueError):
+                                delay = _RETRY_BACKOFF * (2 ** attempt)
+                            await asyncio.sleep(min(delay, 5.0))
+                            continue
+                    resp.raise_for_status()
+                    return resp.json() if resp.content else {}
+                except httpx.RequestError as e:
                     if attempt < _MAX_RETRIES:
-                        retry_after = resp.headers.get("Retry-After")
-                        delay = float(retry_after) if retry_after and retry_after.isdigit() else _RETRY_BACKOFF * (2 ** attempt)
-                        await asyncio.sleep(min(delay, 5.0))
+                        await asyncio.sleep(_RETRY_BACKOFF * (2 ** attempt))
                         continue
-                resp.raise_for_status()
-                return resp.json() if resp.content else {}
-            except httpx.RequestError as e:
-                if attempt < _MAX_RETRIES:
-                    await asyncio.sleep(_RETRY_BACKOFF * (2 ** attempt))
-                    continue
-                raise JiraClientError(f"Network error: {e}") from e
-            except httpx.HTTPStatusError as e:
-                raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}") from e
+                    raise JiraClientError(f"Network error: {e}") from e
+                except httpx.HTTPStatusError as e:
+                    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
         raise JiraClientError("Jira request failed after retries")
 
     async def get_issue(self, issue_key: str, fields: str | None = None) -> dict[str, Any]:
@@ -156,7 +163,8 @@ class JiraClient:
                 body["nextPageToken"] = next_page_token
             return await self._post("/rest/api/3/search/jql", body)
         except JiraClientError as e:
-            if "404" not in str(e) and "HTTP 404" not in str(e):
+            # Robust 404 detection via status_code, not string parsing (which breaks on localized messages)
+            if getattr(e, "status_code", None) != 404 and "404" not in str(e):
                 raise
             # Fallback: legacy GET /search uses startAt for pagination
             fallback_params: dict[str, Any] = {"jql": jql, "maxResults": max_results, "fields": ",".join(fields)}
@@ -196,6 +204,32 @@ class JiraClient:
             # No pagination info — single page
             break
         return all_issues
+
+    async def create_issue(self, project_key: str, summary: str, description: str | None = None, issuetype: str = "Task", labels: list[str] | None = None, priority: str | None = None, assignee_account_id: str | None = None) -> dict:
+        """Create a real Jira issue (used by Demo Lab when switching from stub to real tickets)."""
+        _validate_project_key(project_key)
+        # Build ADF description
+        adf = None
+        if description is not None:
+            adf = {
+                "type": "doc",
+                "version": 1,
+                "content": [{"type": "paragraph", "content": [{"type": "text", "text": description}]}],
+            }
+        fields: dict[str, Any] = {
+            "project": {"key": project_key},
+            "summary": summary,
+            "issuetype": {"name": issuetype},
+        }
+        if adf is not None:
+            fields["description"] = adf
+        if labels:
+            fields["labels"] = labels
+        if priority:
+            fields["priority"] = {"name": priority}
+        if assignee_account_id:
+            fields["assignee"] = {"accountId": assignee_account_id}
+        return await self._post("/rest/api/3/issue", {"fields": fields})
 
     async def check_connection(self) -> dict:
         if not self.base_url or not self.email or not self.api_token:

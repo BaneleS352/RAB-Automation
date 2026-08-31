@@ -215,8 +215,9 @@ class TestFlowStartGuards:
         assert result == "already_in_progress"
 
     @pytest.mark.asyncio
-    async def test_issue_updated_reruns_after_validation_failure(self) -> None:
+    async def test_issue_updated_reruns_after_validation_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Re-check path: a failed validation leaves no approval state, so an update may restart it."""
+        monkeypatch.setenv("RAB_STRICT_VALIDATION", "true")
 
         class FlakyValidator:
             def __init__(self) -> None:

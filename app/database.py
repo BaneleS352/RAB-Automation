@@ -32,12 +32,14 @@ async def get_db() -> aiosqlite.Connection:
     # Re-resolve path if env changed (fixes frozen DB_PATH at import)
     current_path = _get_db_path()
     if _connection is not None and _db_path_cached is not None and current_path != _db_path_cached:
-        # Path changed — close old connection
-        try:
-            await _connection.close()
-        except Exception:
-            pass
-        _connection = None
+        async with _db_lock:
+            if _connection is not None and _db_path_cached != current_path:
+                try:
+                    await _connection.close()
+                except Exception:
+                    pass
+                _connection = None
+                _db_path_cached = None
     if _connection is None:
         async with _db_lock:
             if _connection is None:
@@ -48,8 +50,8 @@ async def get_db() -> aiosqlite.Connection:
                     await _connection.execute("PRAGMA journal_mode=WAL")
                     await _connection.execute("PRAGMA busy_timeout=5000")
                     await _connection.commit()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("PRAGMA setup failed for %s: %s", current_path, e)
                 _db_path_cached = current_path
                 logger.info("Database connection opened: %s", current_path)
     return _connection
@@ -98,7 +100,7 @@ async def _migrate(db: aiosqlite.Connection) -> None:
         await db.execute("ALTER TABLE rab_records ADD COLUMN raw_fields TEXT DEFAULT ''")
     # Systemic fix: issue_key should be unique; previously only a non-unique index existed,
     # allowing silent duplicate rows on concurrent webhooks (similar to blank-details silent duplication).
-    # Deduplicate keeping latest row, then enforce uniqueness.
+    # Deduplicate keeping latest row, then enforce uniqueness and drop redundant non-unique index.
     try:
         dups = await db.execute_fetchall("SELECT issue_key, COUNT(*) c FROM rab_records GROUP BY issue_key HAVING c > 1")
         for row in dups:
@@ -109,6 +111,8 @@ async def _migrate(db: aiosqlite.Connection) -> None:
                 await db.execute("DELETE FROM rab_records WHERE issue_key = ? AND id != ?", (key, keep_id))
                 logger.warning("Deduplicated rab_records for %s, kept id %s", key, keep_id)
         await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS uidx_rab_issue_key ON rab_records(issue_key)")
+        # Non-unique idx_rab_issue is now redundant and wastes write overhead
+        await db.execute("DROP INDEX IF EXISTS idx_rab_issue")
     except Exception as e:
         logger.warning("Could not create unique index on rab_records.issue_key: %s", e)
     await db.execute("""CREATE TABLE IF NOT EXISTS field_change_events (
@@ -175,7 +179,7 @@ async def init_db() -> None:
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
-        CREATE INDEX IF NOT EXISTS idx_rab_issue ON rab_records(issue_key);
+        CREATE UNIQUE INDEX IF NOT EXISTS uidx_rab_issue_key ON rab_records(issue_key);
         CREATE INDEX IF NOT EXISTS idx_approval_issue ON approval_events(issue_key);
         CREATE INDEX IF NOT EXISTS idx_webhook_event_id ON webhook_events(event_id);
         CREATE INDEX IF NOT EXISTS idx_field_change_issue ON field_change_events(issue_key);

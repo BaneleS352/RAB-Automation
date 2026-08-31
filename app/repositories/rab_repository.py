@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from aiosqlite import IntegrityError
 
 from app.database import get_db
+from app.services.status_codes import FAILURE_STATUSES as _FAILURE_STATUSES
+from app.services.status_codes import PENDING_APPROVAL_WHERE as _PENDING_WHERE
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +23,6 @@ ALLOWED_RAB_COLUMNS = frozenset({
 
 ALLOWED_EVENT_COLUMNS = frozenset({"issue_key", "step", "action", "approver", "reason"})
 _APPROVAL_STATUS_MAP = {"approve": "approved", "reject": "rejected"}
-# Re-export centralized vocabularies for backward compat; single source is status_codes.py
-from app.services.status_codes import FAILURE_STATUSES as _FAILURE_STATUSES
-from app.services.status_codes import PENDING_APPROVAL_WHERE as _PENDING_WHERE
 
 
 class RabRepository:
@@ -223,14 +222,13 @@ class RabRepository:
     async def get_aging_records(self, days: int = 2) -> list[dict]:
         """Records still waiting for an approval decision for longer than ``days``."""
         db = await get_db()
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        # Push cutoff to SQL — previously fetched all pending then filtered in Python (N+1 + memory bloat)
         rows = await db.execute_fetchall(
-            f"SELECT * FROM rab_records WHERE {_PENDING_WHERE} ORDER BY updated_at ASC",
+            f"SELECT * FROM rab_records WHERE {_PENDING_WHERE} AND updated_at < ? ORDER BY updated_at ASC",
+            (cutoff,),
         )
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        return [
-            dict(r) for r in rows
-            if (updated := self._parse_ts(r["updated_at"])) and updated < cutoff
-        ]
+        return [dict(r) for r in rows]
 
     async def get_recent_failures(self, limit: int = 5) -> list[dict]:
         """Most recent validation failures and rejections."""
@@ -259,6 +257,15 @@ class RabRepository:
             (limit, offset),
         )
         return [dict(r) for r in rows], total
+
+    async def get_webhook_events_by_issue(self, issue_key: str, limit: int = 20) -> list[dict]:
+        """Efficient per-issue webhook lookup — fixes N+1 scan of 100 rows + Python filter in dashboard."""
+        db = await get_db()
+        rows = await db.execute_fetchall(
+            "SELECT * FROM webhook_events WHERE issue_key = ? ORDER BY id DESC LIMIT ?",
+            (issue_key, limit),
+        )
+        return [dict(r) for r in rows]
 
     async def get_webhook_event(self, event_id: str) -> dict | None:
         db = await get_db()

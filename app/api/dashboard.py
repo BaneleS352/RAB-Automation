@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.api.metrics import get_metrics_data
 from app.repositories.rab_repository import RabRepository
+from app.services.config_warnings import get_config_warnings as _config_warnings
 from app.services.dummy_flow import DummyFlowService
 from app.services.jira_client import JiraClient
 from app.services.test_runner import run_test_suite, TestRunResult
@@ -42,27 +43,6 @@ def _require_feature(request: Request, feature: str) -> None:
     enabled = settings.feature_enabled(getattr(settings, feature))
     if not enabled:
         raise HTTPException(status_code=403, detail="Forbidden")
-
-
-def _config_warnings() -> list[str]:
-    from app.config import get_settings
-    s = get_settings()
-    warns: list[str] = []
-    if not s.JIRA_PROJECT_KEY:
-        warns.append("JIRA_PROJECT_KEY empty — sync falls back to unfiltered 'ORDER BY updated DESC' (cross-project, first 100)")
-    field_vars = [
-        "JIRA_FIELD_DATE_TIME", "JIRA_FIELD_RAB_APPROVER", "JIRA_FIELD_PR_LINK", "JIRA_FIELD_PIPELINE_LINK",
-        "JIRA_FIELD_DEVELOPER", "JIRA_FIELD_TEAM_LEAD", "JIRA_FIELD_PM", "JIRA_FIELD_QA",
-        "JIRA_FIELD_ENVIRONMENT", "JIRA_FIELD_ROLLBACK_DETAILS",
-    ]
-    missing = sum(1 for v in field_vars if not getattr(s, v, ""))
-    if missing >= 8:
-        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — validator now uses description fallback (was previously blank); set customfield IDs to use native fields")
-    elif missing:
-        warns.append(f"{missing}/10 JIRA_FIELD_* mappings empty — description fallback active for those fields")
-    if not any([s.JIRA_TRANSITION_VALIDATE, s.JIRA_TRANSITION_REQUEST_APPROVAL, s.JIRA_TRANSITION_APPROVE, s.JIRA_TRANSITION_REJECT]):
-        warns.append("All JIRA_TRANSITION_* empty — Jira issue status will never transition (was dead code before fix)")
-    return warns
 
 
 async def _check_connection_status() -> dict:
@@ -103,6 +83,7 @@ async def dashboard_health(request: Request, aging_days: int = Query(2, ge=1)) -
     kpis = {
         "total": sum(counts.values()),
         "validated": counts.get("validated", 0),
+        "validated_with_notes": counts.get("validated_with_notes", 0),
         "pending_approval": pending,
         "release_ready": counts.get("release_ready", 0),
         "meeting_scheduled": counts.get("meeting_scheduled", 0),
@@ -160,7 +141,7 @@ async def dashboard_record_detail(request: Request, issue_key: str) -> HTMLRespo
         )
     events = await _repo.get_approval_events(issue_key)
     field_changes = await _repo.get_field_changes(issue_key)
-    webhook_events = [e for e in await _repo.get_webhook_events(limit=100) if e.get("issue_key") == issue_key]
+    webhook_events = await _repo.get_webhook_events_by_issue(issue_key, limit=20)
     return templates.TemplateResponse(
         request, "record_detail.html", {"record": record, "events": events, "field_changes": field_changes, "webhook_events": webhook_events, "issue_key": issue_key},
     )
@@ -210,6 +191,7 @@ async def dashboard_tools_run(
     summary: str = Form("Demo release ticket"),
     scenario: str = Form(""),
     needs_meeting: bool = Form(False),
+    use_real_jira: bool = Form(False),
 ) -> HTMLResponse:
     _require_feature(request, "ENABLE_DEMO")
     data = get_metrics_data()
@@ -217,18 +199,23 @@ async def dashboard_tools_run(
     result = None
     seed_results = None
     sync_result = None
-    # Sync
+    # Sync — now live feed is primary, manual sync kept as fallback
     if action == "sync":
         from app.services.jira_sync import JiraSyncService
         sync_result = await JiraSyncService().sync_all()
         events = await _repo.get_webhook_events(limit=20)
-    # Demo seed
+    # Demo seed — supports real Jira tickets when use_real_jira checked and Jira configured
     elif action == "seed":
-        seed_results = await DummyFlowService.seed_demo_dataset()
+        # Detect real Jira availability for banner
+        from app.config import get_settings
+        s = get_settings()
+        real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
+        # If user ticked real Jira but it's not configured, fall back to stub and surface warning via seed_results
+        seed_results = await DummyFlowService.seed_demo_dataset(use_real_jira=use_real_jira and real_available)
         events = await _repo.get_webhook_events(limit=20)
     # Demo single scenarios
     elif action in ("pending_sdl", "pending_sdm", "validation_failed", "aging"):
-        svc = DummyFlowService(issue_key=issue_key, summary=summary)
+        svc = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=use_real_jira)
         if action == "pending_sdl":
             result = await svc.run_pending_sdl()
         elif action == "pending_sdm":
@@ -238,13 +225,15 @@ async def dashboard_tools_run(
         elif action == "aging":
             result = await svc.run_aging_pending(days=3)
     elif action == "custom":
-        svc = DummyFlowService(issue_key=issue_key, summary=summary)
+        svc = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=use_real_jira)
         if scenario == "pending_sdl":
             result = await svc.run_pending_sdl()
         elif scenario == "pending_sdm":
             result = await svc.run_pending_sdm()
         elif scenario == "validation_failed":
             result = await svc.run_validation_failed()
+        elif scenario == "validated_with_notes":
+            result = await svc.run_validated_with_notes()
         elif scenario == "rejected_sdl":
             result = await svc.run_rejection()
         elif scenario == "rejected_sdm":
@@ -264,9 +253,13 @@ async def dashboard_demo_form(
     needs_meeting: bool = Query(False),
     reject: bool = Query(False),
     scenario: str = Query(""),
+    use_real_jira: bool = Query(False),
 ) -> HTMLResponse:
-    """Render the demo approval flow form page."""
+    """Render the demo approval flow form page. Now supports real Jira tickets (live) vs stub."""
     _require_feature(request, "ENABLE_DEMO")
+    from app.config import get_settings
+    s = get_settings()
+    real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
     # Seed dataset via GET for convenience: /dashboard/demo?scenario=seed
     seed_results = None
     if scenario == "seed":
@@ -282,6 +275,8 @@ async def dashboard_demo_form(
             "needs_meeting": needs_meeting,
             "reject": reject,
             "scenario": scenario,
+            "use_real_jira": use_real_jira,
+            "real_available": real_available,
         },
     )
 
@@ -294,12 +289,17 @@ async def dashboard_demo_run(
     needs_meeting: bool = Form(False),
     reject: bool = Form(False),
     scenario: str = Form(""),
+    use_real_jira: bool = Form(False),
 ) -> HTMLResponse:
-    """Run the demo approval flow and render the result."""
+    """Run the demo approval flow and render the result. Real Jira mode creates live tickets."""
     _require_feature(request, "ENABLE_DEMO")
+    from app.config import get_settings
+    s = get_settings()
+    real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
+    eff_real = bool(use_real_jira and real_available)
     # Seed full dataset
     if scenario == "seed":
-        results = await DummyFlowService.seed_demo_dataset()
+        results = await DummyFlowService.seed_demo_dataset(use_real_jira=eff_real)
         return templates.TemplateResponse(
             request,
             "demo.html",
@@ -311,9 +311,11 @@ async def dashboard_demo_run(
                 "needs_meeting": needs_meeting,
                 "reject": reject,
                 "scenario": scenario,
+                "use_real_jira": use_real_jira,
+                "real_available": real_available,
             },
         )
-    service = DummyFlowService(issue_key=issue_key, summary=summary)
+    service = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=eff_real)
     # Scenario takes precedence over legacy reject/needs_meeting flags
     if scenario == "pending_sdl":
         result = await service.run_pending_sdl()
@@ -321,6 +323,8 @@ async def dashboard_demo_run(
         result = await service.run_pending_sdm()
     elif scenario == "validation_failed":
         result = await service.run_validation_failed()
+    elif scenario == "validated_with_notes":
+        result = await service.run_validated_with_notes()
     elif scenario == "rejected_sdl":
         result = await service.run_rejection()
     elif scenario == "rejected_sdm":
@@ -342,6 +346,8 @@ async def dashboard_demo_run(
             "needs_meeting": needs_meeting,
             "reject": reject,
             "scenario": scenario,
+            "use_real_jira": use_real_jira,
+            "real_available": real_available,
         },
     )
 

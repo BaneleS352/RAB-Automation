@@ -9,6 +9,7 @@ class RabStatus(str, Enum):
     PENDING = "pending"
     VALIDATED = "validated"
     VALIDATION_FAILED = "validation_failed"
+    VALIDATED_WITH_NOTES = "validated_with_notes"  # Advisory: GET and NOTE missing fields per drawio, workflow continues (RAB_STRICT_VALIDATION=false)
     SDL_REQUESTED = "sdl_requested"
     SDL_APPROVED = "sdl_approved"
     SDL_REJECTED = "sdl_rejected"
@@ -35,6 +36,7 @@ def is_sdl_requested(status: str | None) -> bool:
 KNOWN_STATUSES: list[str] = [
     RabStatus.PENDING.value,
     RabStatus.VALIDATED.value,
+    RabStatus.VALIDATED_WITH_NOTES.value,
     RabStatus.VALIDATION_FAILED.value,
     RabStatus.SDL_REQUESTED.value,
     RabStatus.SDL_APPROVED.value,

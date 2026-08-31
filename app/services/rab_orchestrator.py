@@ -10,31 +10,14 @@ from app.repositories.rab_repository import RabRepository
 from app.services.approval_service import ApprovalService, ApprovalStep
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
+from app.services.jira_fields import adf_to_text
 from app.services.status_codes import FLOW_STATUSES, RabStatus
-
-
-def _adf_to_text(adf: object) -> str:
-    if not adf:
-        return ""
-    if isinstance(adf, str):
-        return adf
-    if isinstance(adf, dict):
-        parts: list[str] = []
-        for block in adf.get("content") or []:
-            if isinstance(block, dict):
-                for inline in block.get("content") or []:
-                    if isinstance(inline, dict) and inline.get("type") == "text":
-                        parts.append(inline.get("text") or "")
-                parts.append("\n")
-        text = "".join(parts).strip()
-        return text if text else json.dumps(adf)[:500] if adf else ""
-    return str(adf)[:1000]
 
 
 def _extract_rich_fields_orch(issue: dict, fv: FieldValidator) -> dict:
     fields = issue.get("fields", {}) or {}
     summary = fields.get("summary", "") or ""
-    description = _adf_to_text(fields.get("description"))
+    description = adf_to_text(fields.get("description"))
     priority = (fields.get("priority") or {}).get("name", "") if isinstance(fields.get("priority"), dict) else ""
     issuetype = (fields.get("issuetype") or {}).get("name", "") if isinstance(fields.get("issuetype"), dict) else ""
     jira_status = (fields.get("status") or {}).get("name", "") if isinstance(fields.get("status"), dict) else ""
@@ -124,6 +107,20 @@ class RabOrchestrator:
                 if issue_data:
                     validation = self.field_validator.validate(issue_data)
                     rich = _extract_rich_fields_orch(issue_data, self.field_validator)
+                    # Advisory: always NOTE present/missing (per drawio: GET and NOTE), do not hard-fail on missing.
+                    # Store advisory detail even when valid but with missing_fields so dashboard shows completeness.
+                    strict = bool(getattr(get_settings(), "RAB_STRICT_VALIDATION", False))
+                    if strict:
+                        val_result = validation.detail if not validation.valid else ""
+                        status = "validated" if validation.valid else "validation_failed"
+                    else:
+                        # Advisory: validated_with_notes when any missing, else validated
+                        if validation.missing_fields:
+                            val_result = validation.detail
+                            status = "validated_with_notes"
+                        else:
+                            val_result = ""
+                            status = "validated"
                     await self.rab_repo.upsert_record(issue_key, {
                         "summary": rich["summary"],
                         "description": rich["description"],
@@ -136,8 +133,8 @@ class RabOrchestrator:
                         "assignee": rich["assignee"],
                         "jira_updated": rich["jira_updated"],
                         "raw_fields": rich["raw_fields"],
-                        "validation_result": validation.detail if not validation.valid else "",
-                        "status": "validated" if validation.valid else "validation_failed",
+                        "validation_result": val_result,
+                        "status": status,
                     })
                     existing = await self.rab_repo.get_record(issue_key)
                     if existing and existing.get("status") in FLOW_STATUSES:
@@ -184,17 +181,31 @@ class RabOrchestrator:
                 "jira_updated": rich["jira_updated"],
                 "raw_fields": rich["raw_fields"],
             })
-            await self.rab_repo.record_validation(issue_key, validation.valid, validation.detail)
-            if not validation.valid:
+            # Advisory: when valid True but missing fields, store as validated_with_notes (per drawio: GET and NOTE)
+            if validation.valid and validation.missing_fields:
+                await self.rab_repo.upsert_record(issue_key, {
+                    "status": "validated_with_notes",
+                    "validation_result": validation.detail,
+                })
+            else:
+                await self.rab_repo.record_validation(issue_key, validation.valid, validation.detail)
+            # Advisory mode (default): GET ticket and NOTE which RAB fields are present/missing (per data structure.drawio.html),
+            # do NOT block workflow. Strict mode (RAB_STRICT_VALIDATION=True) retains old hard-fail.
+            strict = bool(getattr(get_settings(), "RAB_STRICT_VALIDATION", False))
+            if not validation.valid and strict:
                 msg = f"Validation failed.\n\n{validation.detail}\n\nPlease update the ticket and trigger re-check."
                 await self._add_comment(issue_key, f"RAB Automation: {msg}")
                 await self._send_card("Validation Failed")
                 await self._maybe_transition(issue_key, "JIRA_TRANSITION_REJECT")
                 return f"validation_failed: {validation.detail}"
-
-            await self._maybe_transition(issue_key, "JIRA_TRANSITION_VALIDATE")
-            await self._add_comment(issue_key, "RAB Automation: Ticket validation passed — starting approvals.")
-            await self._send_card("Validation Passed")
+            # Advisory: always continue, but add a Jira comment noting completeness (fixes blank-details by surfacing it)
+            if validation.missing_fields:
+                await self._add_comment(issue_key, f"RAB Automation: {validation.detail}\n\nWorkflow continues (advisory mode — set RAB_STRICT_VALIDATION=true to block on missing fields).")
+                await self._send_card(f"RAB audit noted — {len(validation.missing_fields)} field(s) missing, proceeding")
+            else:
+                await self._maybe_transition(issue_key, "JIRA_TRANSITION_VALIDATE")
+                await self._add_comment(issue_key, "RAB Automation: Ticket validation passed — starting approvals.")
+                await self._send_card("Validation Passed")
 
             summary = issue_data.get("fields", {}).get("summary", "No summary")
             self.approval_service.create_approval(issue_key, summary)
@@ -329,4 +340,34 @@ class RabOrchestrator:
             else:
                 await self._add_comment(issue_key, "RAB Automation: No meeting needed — release ticket finalized.")
                 await self._send_card("Release Ready")
+                # Teams alerting basis only — final release state (per user request; re-uses send_to_teams.py workflow pattern)
+                try:
+                    from app.services.teams_alert import send_release_ready_alert
+
+                    record = await self.rab_repo.get_record(issue_key)
+                    summary = record.get("summary") if record else ""
+                    details = {
+                        "jira_status": record.get("jira_status") if record else "",
+                        "issuetype": record.get("issuetype") if record else "",
+                        "priority": record.get("priority") if record else "",
+                        "assignee": record.get("assignee") if record else "",
+                        "reporter": record.get("reporter") if record else "",
+                        "environment": "",
+                        "labels": record.get("labels") if record else "",
+                        "validation_result": record.get("validation_result") if record else "",
+                    }
+                    # Try to enrich environment from raw_fields if available
+                    if record and record.get("raw_fields"):
+                        try:
+                            import json as _json
+
+                            raw = _json.loads(record["raw_fields"])
+                            env_val = (raw.get("rab_fields") or {}).get("environment")
+                            if env_val:
+                                details["environment"] = env_val
+                        except Exception:
+                            pass
+                    await send_release_ready_alert(issue_key, summary, details)
+                except Exception as e:
+                    logger.warning("Teams release alert wiring for %s failed (non-blocking): %s", issue_key, e)
                 return "release_ready"

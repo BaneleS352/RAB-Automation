@@ -36,6 +36,8 @@ class TestFieldValidator:
         assert result.missing_fields == []
 
     def test_missing_fields_fails(self, monkeypatch):
+        # Strict mode: missing fields should hard-fail (advisory is tested separately)
+        monkeypatch.setenv("RAB_STRICT_VALIDATION", "true")
         for _, key in REQUIRED_FIELDS:
             if key not in ("assignee", "reporter"):
                 monkeypatch.setenv(f"JIRA_FIELD_{key.upper()}", f"customfield_{key}")
@@ -52,7 +54,8 @@ class TestFieldValidator:
 
     def test_no_mappings_configured(self, monkeypatch):
         # When no JIRA_FIELD_* mappings are set, validator now falls back to parsing description/environment.
-        # With only assignee/reporter and no description block, all 10 custom fields are missing → should fail (was previously silent skip → blank)
+        # With only assignee/reporter and no description block, all 10 custom fields are missing → should fail in strict mode (was previously silent skip → blank)
+        monkeypatch.setenv("RAB_STRICT_VALIDATION", "true")
         validator = FieldValidator()
         fields = {
             "assignee": {"displayName": "Alice"},
@@ -89,6 +92,7 @@ class TestFieldValidator:
         assert result.valid is True
 
     def test_assignee_and_reporter_checked(self, monkeypatch):
+        monkeypatch.setenv("RAB_STRICT_VALIDATION", "true")
         validator = FieldValidator()
         result = validator.validate({"fields": {}})
         assert result.valid is False
@@ -126,6 +130,7 @@ class TestFieldValidator:
         assert validator.extract_field_value({"fields": fields}, "rab_approver") == "Charlie"
 
     def test_empty_person_object_field_counts_as_missing(self, monkeypatch):
+        monkeypatch.setenv("RAB_STRICT_VALIDATION", "true")
         monkeypatch.setenv("JIRA_FIELD_RAB_APPROVER", "customfield_rab_approver")
         validator = FieldValidator()
         fields = {
@@ -177,6 +182,7 @@ class TestFieldValidator:
         assert validator.extract_field_value({"fields": fields}, "environment") == "Production, Staging"
 
     def test_all_empty_list_values_count_as_missing(self, monkeypatch):
+        monkeypatch.setenv("RAB_STRICT_VALIDATION", "true")
         monkeypatch.setenv("JIRA_FIELD_ENVIRONMENT", "customfield_environment")
         validator = FieldValidator()
         fields = {

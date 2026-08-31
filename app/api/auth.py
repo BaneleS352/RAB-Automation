@@ -42,7 +42,7 @@ class AccessTokenMiddleware(BaseHTTPMiddleware):
                     token,
                     max_age=3600,
                     httponly=True,
-                    secure=True,
+                    secure=request.url.scheme == "https",
                     samesite="lax",
                     path="/",
                 )

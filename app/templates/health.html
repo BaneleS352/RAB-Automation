@@ -23,6 +23,7 @@
     {% if kpis.total %}
     <div class="pipeline-rail-track">
         <div class="pipeline-seg seg-validated" data-width="{{ (kpis.validated / kpis.total * 100) | round(1) }}" title="Validated"></div>
+        <div class="pipeline-seg seg-validated-with-notes" data-width="{{ (kpis.validated_with_notes / kpis.total * 100) | round(1) }}" title="Validated with notes"></div>
         <div class="pipeline-seg seg-ready" data-width="{{ (kpis.release_ready / kpis.total * 100) | round(1) }}" title="Release ready"></div>
         <div class="pipeline-seg seg-pending" data-width="{{ (kpis.pending_approval / kpis.total * 100) | round(1) }}" title="Pending approval"></div>
         <div class="pipeline-seg seg-failed" data-width="{{ (kpis.validation_failed / kpis.total * 100) | round(1) }}" title="Validation failed"></div>
@@ -33,6 +34,7 @@
     {% endif %}
     <div class="pipeline-legend">
         <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--success);"></span>Validated <span class="count">{{ kpis.validated }}</span></span>
+        <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:#8bc34a;"></span>With notes <span class="count">{{ kpis.validated_with_notes }}</span></span>
         <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--primary);"></span>Release ready <span class="count">{{ kpis.release_ready }}</span></span>
         <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--warning);"></span>Pending approval <span class="count">{{ kpis.pending_approval }}</span></span>
         <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--danger);"></span>Validation failed <span class="count">{{ kpis.validation_failed }}</span></span>
@@ -73,6 +75,10 @@
     <div class="kpi-card kpi-ok">
         <div class="kpi-top"><span class="kpi-icon">✓</span><span class="muted" style="font-size:0.72rem;">ok</span></div>
         <span class="kpi-value">{{ kpis.validated }}</span><span class="kpi-label">Validated</span>
+    </div>
+    <div class="kpi-card kpi-note">
+        <div class="kpi-top"><span class="kpi-icon">◎</span><span class="muted" style="font-size:0.72rem;">note</span></div>
+        <span class="kpi-value">{{ kpis.validated_with_notes }}</span><span class="kpi-label">With notes <span style="font-weight:400; font-size:0.7rem;">(advisory)</span></span>
     </div>
     <div class="kpi-card kpi-warn">
         <div class="kpi-top"><span class="kpi-icon">◷</span><span class="muted" style="font-size:0.72rem;">wait</span></div>

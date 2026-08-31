@@ -2,10 +2,11 @@
 
 import logging
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.repositories.rab_repository import RabRepository
+from app.services.jira_client import JiraClient
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/rab", tags=["rab"])
@@ -86,6 +87,7 @@ class RabSummary(BaseModel):
     counts: dict[str, int]
     pending_approval: int
     validation_failed: int
+    validated_with_notes: int
     rejected: int
     release_ready: int
     meeting_scheduled: int
@@ -103,12 +105,12 @@ async def list_records(
     return RabRecordList(records=[RabRecord(**r) for r in rows], total=total)
 
 
-@router.get("/records/{issue_key}", response_model=RabRecord | None)
-async def get_record(issue_key: str) -> RabRecord | None:
+@router.get("/records/{issue_key}", response_model=RabRecord)
+async def get_record(issue_key: str) -> RabRecord:
     row = await _repo.get_record(issue_key)
     if row:
         return RabRecord(**row)
-    return None
+    raise HTTPException(status_code=404, detail=f"Issue {issue_key} not found")
 
 
 @router.get("/records/{issue_key}/events", response_model=list[ApprovalEvent])
@@ -142,11 +144,44 @@ async def get_summary(aging_days: int = Query(2, ge=1)) -> RabSummary:
         counts=counts,
         pending_approval=pending,
         validation_failed=counts.get("validation_failed", 0),
+        validated_with_notes=counts.get("validated_with_notes", 0),
         rejected=counts.get("sdl_rejected", 0) + counts.get("sdm_rejected", 0),
         release_ready=counts.get("release_ready", 0),
         meeting_scheduled=counts.get("meeting_scheduled", 0),
         aging=[RabRecord(**r) for r in aging],
     )
+
+
+@router.get("/live")
+async def live_jira_feed(project_key: str | None = None, limit: int = Query(20, ge=1, le=50)) -> dict:
+    """Live Jira feed — directly from Jira REST, not from local DB. Powers the live dashboard."""
+    jira = JiraClient()
+    if not jira.base_url or not jira.email or not jira.api_token:
+        return {"live": False, "issues": [], "detail": "Jira not configured"}
+    # Prefer explicit project, else configured JIRA_PROJECT_KEY, else all-recent
+    key = project_key or jira.settings.JIRA_PROJECT_KEY
+    try:
+        if key:
+            issues = await jira.list_project_issues(key, max_results=limit)
+        else:
+            data = await jira.search_issues("ORDER BY updated DESC", max_results=limit)
+            issues = data.get("issues", [])
+        # Return trimmed live view
+        live_issues = []
+        for it in issues[:limit]:
+            f = it.get("fields", {})
+            live_issues.append({
+                "key": it.get("key"),
+                "summary": f.get("summary", ""),
+                "status": (f.get("status") or {}).get("name", ""),
+                "assignee": (f.get("assignee") or {}).get("displayName", ""),
+                "updated": f.get("updated", ""),
+                "priority": (f.get("priority") or {}).get("name", ""),
+            })
+        return {"live": True, "project": key or "all", "issues": live_issues, "count": len(live_issues)}
+    except Exception as e:
+        logger.warning("Live Jira feed failed: %s", e)
+        return {"live": False, "issues": [], "detail": str(e)[:200]}
 
 
 @router.post("/sync")

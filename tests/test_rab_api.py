@@ -47,8 +47,8 @@ class TestRabApi:
 
     def test_get_nonexistent_record(self, client: TestClient) -> None:
         response = client.get("/rab/records/DOES-NOT-EXIST")
-        assert response.status_code == 200
-        assert response.json() is None
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Issue DOES-NOT-EXIST not found"
 
     def test_list_records_pagination_params(self, client: TestClient) -> None:
         response = client.get("/rab/records?limit=5&offset=0")
