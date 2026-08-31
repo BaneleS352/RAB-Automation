@@ -16,9 +16,22 @@ payload = {
     "body": [
         {
             "type": "TextBlock",
-            "text": "Hello World",
-            "size": "Large",
-            "weight": "Bolder"
+            "text": "Is this your choice?",
+            "size": "Medium",
+            "weight": "Bolder",
+            "wrap": True
+        }
+    ],
+    "actions": [
+        {
+            "type": "Action.OpenUrl",
+            "title": "Yes",
+            "url": "https://your-api.example.com/confirm?choice=yes&request_id=123"
+        },
+        {
+            "type": "Action.OpenUrl",
+            "title": "No",
+            "url": "https://your-api.example.com/confirm?choice=no&request_id=123"
         }
     ]
 }
@@ -35,7 +48,7 @@ try:
     print(f"Response body: {response.text}")
 
     response.raise_for_status()
-    print("Adaptive Card sent successfully.")
+    print("Card sent successfully.")
 
 except requests.RequestException as error:
     print(f"Request failed: {error}")
