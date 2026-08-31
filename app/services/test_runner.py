@@ -108,6 +108,12 @@ async def run_test_suite(timeout: int = 120) -> TestRunResult:
             _run_blocking, cmd, env, str(project_root), timeout
         )
     except subprocess.TimeoutExpired:
+        # Clean up temp DB even on timeout
+        for p in [temp_db, Path(str(temp_db) + "-shm"), Path(str(temp_db) + "-wal")]:
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
         return TestRunResult(
             timed_out=True,
             output=f"Test run exceeded {timeout}s and was terminated.",
@@ -115,13 +121,18 @@ async def run_test_suite(timeout: int = 120) -> TestRunResult:
         )
     except OSError as e:
         logger.error("Failed to launch pytest subprocess: %s", e)
+        for p in [temp_db, Path(str(temp_db) + "-shm"), Path(str(temp_db) + "-wal")]:
+            try:
+                p.unlink(missing_ok=True)
+            except Exception:
+                pass
         return TestRunResult(success=False, message=f"Failed to launch pytest: {e}")
 
     output = process.stdout + process.stderr
     passed, failed, errors, skipped, duration = _parse_summary(output)
     tests = _parse_tests(output)
 
-    return TestRunResult(
+    result = TestRunResult(
         success=(failed == 0 and errors == 0),
         passed=passed,
         failed=failed,
@@ -132,3 +143,10 @@ async def run_test_suite(timeout: int = 120) -> TestRunResult:
         message=f"Exit code {process.returncode}",
         tests=tests,
     )
+    # Clean up isolated DB — previously leaked (C10)
+    for p in [temp_db, Path(str(temp_db) + "-shm"), Path(str(temp_db) + "-wal")]:
+        try:
+            p.unlink(missing_ok=True)
+        except Exception:
+            pass
+    return result

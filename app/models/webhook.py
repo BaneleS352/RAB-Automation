@@ -5,7 +5,7 @@ import re
 from pydantic import BaseModel, Field, field_validator
 
 
-ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9_]+-\d+$")
+ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
 
 
 class JiraIssuePayload(BaseModel):

@@ -20,10 +20,22 @@ class KeyVaultClient:
     def __init__(self, vault_url: str | None = None) -> None:
         self.vault_url = vault_url
         self._use_key_vault = bool(vault_url)
+        self._client = None
+        self._credential = None
         if self._use_key_vault:
             logger.debug("Key Vault configured: %s", vault_url)
         else:
             logger.debug("Key Vault not configured — using env vars")
+
+    def _get_client(self):
+        if self._client is not None:
+            return self._client
+        from azure.identity import DefaultAzureCredential
+        from azure.keyvault.secrets import SecretClient
+
+        self._credential = DefaultAzureCredential()
+        self._client = SecretClient(vault_url=self.vault_url, credential=self._credential)
+        return self._client
 
     def get_secret(self, secret_name: str) -> str:
         """Retrieve a secret. Falls back to environment variable."""
@@ -34,11 +46,7 @@ class KeyVaultClient:
             return value
 
         try:
-            from azure.identity import DefaultAzureCredential
-            from azure.keyvault.secrets import SecretClient
-
-            credential = DefaultAzureCredential()
-            client = SecretClient(vault_url=self.vault_url, credential=credential)
+            client = self._get_client()
             secret = client.get_secret(secret_name)
             return secret.value
         except ImportError:
@@ -50,6 +58,10 @@ class KeyVaultClient:
         except Exception as e:
             # Key Vault is an optional override. A transient outage or missing
             # local credential must not prevent env-based development startup.
+            # Only fallback for transient errors; auth failures (401/403) should not silently use stale env.
+            if "401" in str(e) or "403" in str(e) or "Unauthorized" in str(e):
+                logger.error("Key Vault auth failed for '%s': %s", secret_name, e)
+                raise KeyVaultClientError("Key Vault authentication failed") from e
             logger.warning("Key Vault lookup failed for '%s'; using environment fallback", secret_name)
             value = os.environ.get(secret_name, "")
             if value:

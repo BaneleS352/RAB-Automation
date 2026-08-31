@@ -10,16 +10,18 @@
     <a class="btn btn-ghost btn-sm" href="/dashboard/demo">Reset</a>
 </div>
 
-<!-- Seed dataset CTA -->
+<!-- Seed dataset CTA — now real Jira when checked -->
 <div class="card" style="margin-top:1rem; border-color: var(--primary); background: linear-gradient(135deg, var(--primary-soft) 0%, #fff 60%);">
     <div class="card-body" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
         <div>
             <strong style="font-size:0.95rem;">Populate the whole pipeline</strong>
-            <p class="muted" style="margin:0.2rem 0 0;">Creates 8 issues covering every status — pending SDL/SDM, validation failed, rejected, release ready, meeting scheduled, aging. One click to fill Overview KPIs.</p>
+            <p class="muted" style="margin:0.2rem 0 0;">Creates 8 issues covering every status — pending SDL/SDM, validation failed, validated with notes (advisory), rejected, release ready, meeting scheduled, aging. <strong>Real Jira</strong> creates live tickets in <code>{{ 'TEST' if real_available else 'Jira (not configured)' }}</code> via <code>JiraClient.create_issue</code> with RAB Details block; stub is local-only.</p>
+            {% if not real_available %}<p class="muted" style="margin:0.2rem 0 0; color:var(--warning);">Jira not configured — real mode will fallback to stub. Set <code>JIRA_BASE_URL</code> + creds in <code>.env</code>.</p>{% endif %}
         </div>
-        <form method="post" action="/dashboard/demo" style="margin:0;">
+        <form method="post" action="/dashboard/demo" style="margin:0; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
             <input type="hidden" name="scenario" value="seed">
             <input type="hidden" name="issue_key" value="DEMO-SEED">
+            <label class="field checkbox-field" style="margin:0;"><input type="checkbox" name="use_real_jira" value="true" {% if use_real_jira %}checked{% endif %} {% if not real_available %}disabled{% endif %}><span>Use real Jira tickets</span></label>
             <button type="submit" class="btn btn-primary">Seed demo dataset →</button>
         </form>
     </div>
@@ -76,6 +78,7 @@
                     <option value="pending_sdl" {% if scenario=='pending_sdl' %}selected{% endif %}>Pending at SDL</option>
                     <option value="pending_sdm" {% if scenario=='pending_sdm' %}selected{% endif %}>Pending at SDM</option>
                     <option value="validation_failed" {% if scenario=='validation_failed' %}selected{% endif %}>Validation failed</option>
+                    <option value="validated_with_notes" {% if scenario=='validated_with_notes' %}selected{% endif %}>Validated with notes (advisory)</option>
                     <option value="rejected_sdl" {% if scenario=='rejected_sdl' %}selected{% endif %}>Rejected by SDL</option>
                     <option value="rejected_sdm" {% if scenario=='rejected_sdm' %}selected{% endif %}>Rejected by SDM</option>
                     <option value="aging" {% if scenario=='aging' %}selected{% endif %}>Aging — pending 3 days</option>
@@ -84,6 +87,10 @@
             <label class="field checkbox-field" title="Only for full approval">
                 <input type="checkbox" name="needs_meeting" value="true" {% if needs_meeting %}checked{% endif %}>
                 <span>Meeting needed</span>
+            </label>
+            <label class="field checkbox-field" title="Create real Jira issue via Jira API (requires Jira config)">
+                <input type="checkbox" name="use_real_jira" value="true" {% if use_real_jira %}checked{% endif %} {% if not real_available %}disabled{% endif %}>
+                <span>Use real Jira ticket</span>
             </label>
             <!-- legacy reject checkbox kept hidden for backward compat but scenario is preferred -->
             <input type="hidden" name="reject" value="{% if reject %}true{% endif %}">

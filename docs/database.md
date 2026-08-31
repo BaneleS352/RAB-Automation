@@ -40,8 +40,9 @@ One row per Jira issue, updated through its lifecycle.
 | Value | Meaning |
 |-------|---------|
 | `pending` | Initial state |
-| `validated` | Validation passed |
-| `validation_failed` | Validation failed |
+| `validated` | Validation passed (all 12 RAB fields present) |
+| `validated_with_notes` | Advisory: GET and NOTE — workflow continues but some RAB fields missing (detail in `validation_result`, e.g. `RAB audit — Present 2/12…`); set when `RAB_STRICT_VALIDATION=false` (default per `data structure.drawio.html`) |
+| `validation_failed` | Validation failed (strict mode `RAB_STRICT_VALIDATION=true` only) |
 | `sdl_approved` / `sdl_rejected` | SDL decision recorded |
 | `sdm_approved` / `sdm_rejected` | SDM decision recorded |
 | `meeting_scheduled` | Meeting required after approvals |

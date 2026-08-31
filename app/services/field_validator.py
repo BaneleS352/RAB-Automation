@@ -54,6 +54,8 @@ class FieldValidator:
                 self.field_map[field_key] = custom if custom is not None and custom != "" else None
 
     def extract_field_value(self, issue_data: dict, field_key: str) -> str | None:
+        from app.services.jira_fields import adf_to_text
+
         fields = issue_data.get("fields", {})
         mapped = self.field_map.get(field_key)
         if mapped:
@@ -70,7 +72,7 @@ class FieldValidator:
                 # If mapped field exists but is empty, fall through to description fallback (was previously blank)
         # Fallback: try to parse from Jira description text when custom field not configured or empty.
         # This addresses the systemic "empty/not mapped" — description now contains the RAB block from populate script.
-        desc_text = self._description_text(fields.get("description"))
+        desc_text = adf_to_text(fields.get("description"))
         if desc_text:
             fallback = self._extract_from_description(desc_text, field_key)
             if fallback:
@@ -81,23 +83,6 @@ class FieldValidator:
             if env:
                 return env
         return None
-
-    @staticmethod
-    def _description_text(adf: object) -> str:
-        if not adf:
-            return ""
-        if isinstance(adf, str):
-            return adf
-        if isinstance(adf, dict):
-            parts: list[str] = []
-            for block in adf.get("content") or []:
-                if isinstance(block, dict):
-                    for inline in block.get("content") or []:
-                        if isinstance(inline, dict) and inline.get("type") == "text":
-                            parts.append(inline.get("text") or "")
-                    parts.append("\n")
-            return "".join(parts).strip()
-        return str(adf)
 
     @staticmethod
     def _extract_from_description(text: str, field_key: str) -> str | None:
@@ -158,22 +143,47 @@ class FieldValidator:
             return stripped or None
         return str(value).strip() or None
 
-    def validate(self, issue_data: dict) -> ValidationResult:
+    def audit(self, issue_data: dict) -> dict[str, list[str] | str]:
+        """Advisory audit — note which RAB fields are present vs missing (per data structure.drawio.html: GET and NOTE, not hard FAIL)."""
+        present: list[str] = []
         missing: list[str] = []
+        present_values: dict[str, str] = {}
         for display_name, field_key in REQUIRED_FIELDS:
             value = self.extract_field_value(issue_data, field_key)
-            mapped = self.field_map.get(field_key)
-            if not value or (isinstance(value, str) and not value.strip()):
-                # Only warn about missing mapping when fallback also failed — previously was silent skip (same class as blank-details)
-                if mapped is None:
-                    logger.info("Field '%s' has no JIRA_FIELD_* mapping and no description fallback — will be reported as missing", display_name)
+            if value and isinstance(value, str) and value.strip():
+                present.append(display_name)
+                present_values[display_name] = value[:120]
+            else:
                 missing.append(display_name)
-            elif mapped is None and value:
+        return {"present": present, "missing": missing, "present_values": present_values}
+
+    def validate(self, issue_data: dict) -> ValidationResult:
+        audit = self.audit(issue_data)
+        missing: list[str] = audit["missing"]  # type: ignore
+        present: list[str] = audit["present"]  # type: ignore
+
+        # Log mapping fallback usage (was silent blank before)
+        for display_name, field_key in REQUIRED_FIELDS:
+            mapped = self.field_map.get(field_key)
+            value = self.extract_field_value(issue_data, field_key)
+            if mapped is None and value:
                 logger.debug("Field '%s' satisfied via description fallback (no JIRA_FIELD_* mapping): %s", display_name, value[:60])
+            elif mapped is None and not value:
+                logger.info("Field '%s' has no JIRA_FIELD_* mapping and no description fallback — will be reported as missing", display_name)
 
+        # Advisory mode (default, per user request + drawio): GET ticket and NOTE present/missing, do not block workflow
+        # Strict mode (RAB_STRICT_VALIDATION=True) retains old hard-fail behavior.
+        strict = bool(getattr(self.settings, "RAB_STRICT_VALIDATION", False))
         if missing:
-            detail = f"Missing required fields: {', '.join(missing)}"
-            logger.warning("Validation failed: %s", detail)
-            return ValidationResult(valid=False, missing_fields=missing, detail=detail)
+            if strict:
+                detail = f"Missing required fields: {', '.join(missing)}"
+                logger.warning("Validation failed (strict): %s", detail)
+                return ValidationResult(valid=False, missing_fields=missing, detail=detail)
+            # Advisory: always valid, but detail notes present/missing (this fixes blank-details by surfacing completeness)
+            present_str = ", ".join(present) if present else "none"
+            missing_str = ", ".join(missing) if missing else "none"
+            detail = f"RAB audit — Present ({len(present)}/12): {present_str} | Missing ({len(missing)}/12): {missing_str} (advisory, workflow continues)"
+            logger.info("RAB audit (advisory): %s", detail)
+            return ValidationResult(valid=True, missing_fields=missing, detail=detail)
 
-        return ValidationResult(valid=True, detail="All required fields are present.")
+        return ValidationResult(valid=True, detail="All 12 RAB fields present — Present (12/12): " + ", ".join(present))

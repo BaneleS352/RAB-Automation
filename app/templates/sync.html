@@ -1,22 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Sync — RAB Monitor{% endblock %}
+{% block title %}Live Jira — RAB Monitor{% endblock %}
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Jira Sync</h1>
-        <p class="muted" style="margin:0;">Pull all Jira issues into the monitor — regardless of how they were created (UI, API, import, automation). Updates <a href="/dashboard/records">Audit Records</a> and <a href="/dashboard/health">Overview</a>.</p>
+        <h1>Live Jira Feed</h1>
+        <p class="muted" style="margin:0;">Real-time Jira issues — live from <code>GET /rest/api/3/search/jql</code> (<code>/rab/live</code>), not just local DB. Replaces the manual sync button (still available as backfill). Updates <a href="/dashboard/records">Audit Records</a> and <a href="/dashboard/health">Overview</a> automatically.</p>
     </div>
-    <a class="btn btn-ghost btn-sm" href="/dashboard/records">View issues</a>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <a class="btn btn-ghost btn-sm" href="/dashboard/records">View issues</a>
+        <button id="live-toggle" class="btn btn-primary btn-sm">● Live</button>
+    </div>
+</div>
+
+<div class="card" style="margin-top:1rem;">
+    <div class="card-header" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+        <h3>Live feed <span class="muted" style="font-weight:400; font-size:0.8rem;">— polls <code>/rab/live</code> every 5s</span></h3>
+        <span id="live-status" class="badge badge-none">Connecting…</span>
+    </div>
+    <div class="card-body" style="padding:0;">
+        <div class="table-wrapper" style="border:none; box-shadow:none; margin:0;">
+            <table>
+                <thead><tr><th>Key</th><th>Summary</th><th>Jira status</th><th>Assignee</th><th>Updated</th></tr></thead>
+                <tbody id="live-tbody"><tr><td colspan="5" class="muted" style="text-align:center; padding:1rem;">Loading live Jira feed…</td></tr></tbody>
+            </table>
+        </div>
+        <div style="padding:0.75rem 1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+            <a class="btn btn-outline btn-sm" href="/rab/live" target="_blank">Open /rab/live JSON →</a>
+            <span class="muted" style="font-size:0.8rem;">Live shows real Jira — DB audit trail is separate. Use manual sync below to backfill DB for approvals.</span>
+        </div>
+    </div>
 </div>
 
 <div class="card" style="margin-top:1rem;">
     <div class="card-body" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
         <div>
-            <strong>Sync project</strong>
-            <p class="muted" style="margin:0.2rem 0 0;">Uses <code>JIRA_PROJECT_KEY</code> if set, otherwise recent 100 issues. Requires <code>JIRA_BASE_URL</code> + <code>JIRA_EMAIL</code> + <code>JIRA_API_TOKEN</code>.</p>
+            <strong>Manual backfill (legacy sync)</strong>
+            <p class="muted" style="margin:0.2rem 0 0;">Uses <code>JIRA_PROJECT_KEY</code> if set, otherwise recent 100 issues. Requires <code>JIRA_BASE_URL</code> + <code>JIRA_EMAIL</code> + <code>JIRA_API_TOKEN</code>. Kept for import/backfill — live feed is now primary.</p>
         </div>
         <form method="post" action="/dashboard/sync" style="margin:0;">
-            <button type="submit" class="btn btn-primary">Sync all Jira issues →</button>
+            <button type="submit" class="btn btn-outline">Sync all Jira issues →</button>
         </form>
     </div>
 </div>
@@ -61,10 +83,65 @@
     <div class="card-header"><h3>How monitoring works</h3></div>
     <div class="card-body" style="font-size:0.875rem; color:var(--text-2); line-height:1.6;">
         <ul style="margin:0 0 0 1.1rem;">
+            <li><strong>Live feed</strong> — <code>GET /rab/live</code> polls Jira directly every 5s (<code>project = JIRA_PROJECT_KEY ORDER BY updated DESC</code>), no DB sync needed. Replaces manual sync as primary.</li>
             <li><strong>Webhook</strong> — every <code>jira:issue_created</code> / <code>jira:issue_updated</code> (and now any event with an issue) is upserted: <code>summary</code> + <code>validation_result</code> + <code>status</code>. Approval state is preserved if already tracked.</li>
-            <li><strong>Sync</strong> — <code>POST /rab/sync</code> (JSON) or <code>POST /dashboard/sync</code> (UI) fetches <code>project = JIRA_PROJECT_KEY ORDER BY updated DESC</code> via <code>GET /rest/api/3/search/jql</code> and upserts every issue. Works for issues created via UI, API, CSV import, automation — regardless of webhook history.</li>
-            <li><strong>Demo</strong> — <a href="/dashboard/demo">Demo Lab</a> still seeds synthetic issues (pending SDL/SDM, validation failed, aging) for pipeline preview without Jira.</li>
+            <li><strong>Manual sync</strong> — <code>POST /rab/sync</code> still available as backfill for DB audit trail (approvals, validation). Live feed shows Jira truth; sync materializes it to DB.</li>
+            <li><strong>Demo Lab</strong> — now creates <strong>real Jira tickets</strong> when <code>Use real Jira tickets</code> is checked (requires <code>JIRA_BASE_URL</code> + creds); otherwise stub. See <a href="/dashboard/demo">Demo Lab</a>.</li>
         </ul>
     </div>
 </div>
+
+<script>
+(function() {
+  const tbody = document.getElementById('live-tbody');
+  const statusEl = document.getElementById('live-status');
+  const toggle = document.getElementById('live-toggle');
+  let live = true;
+  let timer = null;
+  function fmt(iso) {
+    if (!iso) return '—';
+    try { return new Date(iso).toLocaleString(); } catch { return iso.slice(0,19).replace('T',' '); }
+  }
+  async function poll() {
+    if (!live) return;
+    try {
+      const r = await fetch('/rab/live?limit=20', {headers: {'Accept':'application/json'}});
+      const j = await r.json();
+      if (!j.live) {
+        statusEl.textContent = j.detail || 'Jira not configured';
+        statusEl.className = 'badge badge-none';
+        tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center; padding:1rem;">Live disabled — ' + (j.detail || 'configure Jira') + ' — use manual sync or Demo Lab (real Jira).</td></tr>';
+        return;
+      }
+      statusEl.textContent = 'Live ● ' + j.count + ' issues' + (j.project ? ' (' + j.project + ')' : '');
+      statusEl.className = 'badge badge-validated';
+      if (!j.issues.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center; padding:1rem;">No issues in Jira project ' + (j.project||'') + '</td></tr>';
+        return;
+      }
+      tbody.innerHTML = j.issues.map(it => `
+        <tr>
+          <td><a href="/dashboard/records/${it.key}"><strong>${it.key}</strong></a> <a href="https://djtough24.atlassian.net/browse/${it.key}" target="_blank" style="font-size:0.75rem;">↗</a></td>
+          <td><small>${(it.summary||'').slice(0,60)}</small></td>
+          <td><span class="badge">${it.status||'—'}</span></td>
+          <td><small>${it.assignee||'Unassigned'}</small></td>
+          <td><small style="font-family:JetBrains Mono,monospace;">${fmt(it.updated)}</small></td>
+        </tr>`).join('');
+    } catch (e) {
+      statusEl.textContent = 'Error';
+      statusEl.className = 'badge badge-validation_failed';
+      tbody.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center; padding:1rem;">Live feed error: ' + e + '</td></tr>';
+    }
+  }
+  toggle.addEventListener('click', () => {
+    live = !live;
+    toggle.textContent = live ? '● Live' : '○ Paused';
+    toggle.className = live ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+    statusEl.textContent = live ? 'Resuming…' : 'Paused';
+    if (live) { poll(); timer = setInterval(poll, 5000); } else { clearInterval(timer); }
+  });
+  poll();
+  timer = setInterval(poll, 5000);
+})();
+</script>
 {% endblock %}

@@ -10,7 +10,13 @@ def setup_logging(log_level: str = "INFO") -> None:
     Args:
         log_level: The logging level string (DEBUG, INFO, WARNING, ERROR, CRITICAL).
     """
-    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+    normalized = log_level.upper()
+    valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    if normalized not in valid_levels:
+        # Use print to avoid recursion before logging is configured
+        print(f"WARNING: Invalid LOG_LEVEL '{log_level}' — falling back to INFO (valid: {', '.join(sorted(valid_levels))})", file=sys.stderr)
+        normalized = "INFO"
+    numeric_level = getattr(logging, normalized, logging.INFO)
 
     logging.basicConfig(
         level=numeric_level,

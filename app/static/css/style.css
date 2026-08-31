@@ -195,6 +195,7 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .pipeline-rail-track { display:flex; height:8px; overflow:hidden; border-radius:999px; background:#171a20; }
 .pipeline-seg { min-width:2px; height:100%; transition:width .2s ease; }
 .pipeline-seg.seg-validated { background:var(--success); }
+.pipeline-seg.seg-validated-with-notes { background:#8bc34a; }
 .pipeline-seg.seg-ready { background:var(--primary); }
 .pipeline-seg.seg-pending { background:var(--warning); }
 .pipeline-seg.seg-failed { background:var(--danger); }
@@ -241,6 +242,7 @@ tbody tr:hover td { background: rgba(255,255,255,.02); }
   font-size: 9px; font-weight:600; border:1px solid var(--line); background:#0e1014; color:#8a8e96;
 }
 .badge-validated, .badge-approved, .badge-sdl-approved, .badge-sdm-approved, .badge-release-ready { background: rgba(47,204,102,.12); color:#2fcc66; border-color: rgba(47,204,102,.25); }
+.badge-validated-with-notes, .badge-validated_with_notes { background: rgba(139,195,74,.15); color:#8bc34a; border-color: rgba(139,195,74,.3); }
 .badge-pending, .badge-sdl-requested, .badge-sdm-requested { background: rgba(233,184,74,.12); color:#e9b84a; border-color: rgba(233,184,74,.25); }
 .badge-rejected, .badge-failed, .badge-sdl-rejected, .badge-sdm-rejected, .badge-validation-failed, .badge-validation_failed { background: rgba(240,97,88,.12); color:#f06158; border-color: rgba(240,97,88,.25); }
 .badge-meeting-scheduled { background: rgba(122,77,232,.14); color:#a583ff; border-color: rgba(122,77,232,.3); }
@@ -311,7 +313,7 @@ body.light {
 }
 .kpi-card { position:relative; overflow:hidden; min-height:105px; box-shadow:0 8px 22px rgba(0,0,0,.12); }
 .kpi-card::before { content:""; position:absolute; inset:0 0 auto 0; height:3px; background:var(--primary); }
-.kpi-card.kpi-ok::before { background:var(--success); }.kpi-card.kpi-warn::before { background:var(--warning); }.kpi-card.kpi-fail::before { background:var(--danger); }.kpi-card.kpi-ready::before { background:var(--info); }
+.kpi-card.kpi-ok::before { background:var(--success); }.kpi-card.kpi-warn::before { background:var(--warning); }.kpi-card.kpi-fail::before { background:var(--danger); }.kpi-card.kpi-ready::before { background:var(--info); }.kpi-card.kpi-note::before { background:#8bc34a; }
 .kpi-card:hover { transform:translateY(-2px); border-color:var(--line-strong); }
 .section-kicker { color:var(--primary); font-size:9px; text-transform:uppercase; letter-spacing:.08em; }
 .detail-columns { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }

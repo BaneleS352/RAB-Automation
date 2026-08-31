@@ -77,6 +77,17 @@ class Settings(BaseSettings):
     JIRA_TRANSITION_APPROVE: str = ""
     JIRA_TRANSITION_REJECT: str = ""
 
+    # Advisory vs strict validation: when False (default, per data structure.drawio.html),
+    # we GET the ticket and NOTE which of the 12 RAB fields are present/missing, but do not
+    # block the workflow. When True, missing fields cause validation_failed and halt.
+    RAB_STRICT_VALIDATION: bool = False
+
+    # Teams alerting (power-automate workflow webhook) — alerting basis only, final release state.
+    # Re-uses the proven pattern from scripts/send_to_teams.py (TEAMS_WORKFLOW_WEBHOOK_URL).
+    TEAMS_WORKFLOW_WEBHOOK_URL: str = ""
+    # Back-compat alias for the older incoming-webhook variable name
+    TEAMS_WEBHOOK_URL: str = ""
+
     def feature_enabled(self, value: bool | None) -> bool:
         """Enable local-only features by default, require explicit prod opt-in."""
         return value if value is not None else self.APP_ENV.lower() in {"local", "test", "development"}
@@ -101,6 +112,8 @@ def _resolve_vault_secrets(vault_url: str) -> tuple[tuple[str, str], ...]:
 
 def get_settings() -> Settings:
     """Return a Settings instance, overlaying env values with vault secrets when configured."""
+    # Not cached — tests use monkeypatch to change env per-test and expect fresh Settings.
+    # Vault resolution is still cached via _resolve_vault_secrets.
     settings = Settings()
     if settings.AZURE_VAULT_URL:
         overrides = dict(_resolve_vault_secrets(settings.AZURE_VAULT_URL))

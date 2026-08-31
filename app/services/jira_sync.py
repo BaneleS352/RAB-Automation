@@ -8,30 +8,8 @@ from app.config import get_settings
 from app.repositories.rab_repository import RabRepository
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
+from app.services.jira_fields import adf_to_text
 from app.services.status_codes import FLOW_STATUSES
-
-
-def _adf_to_text(adf: object) -> str:
-    """Flatten Atlassian Document Format (description) to plain text."""
-    if not adf:
-        return ""
-    if isinstance(adf, str):
-        return adf
-    if isinstance(adf, dict):
-        # ADF doc: {"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"..."}]}]}
-        parts: list[str] = []
-        for block in adf.get("content") or []:
-            if isinstance(block, dict):
-                for inline in block.get("content") or []:
-                    if isinstance(inline, dict) and inline.get("type") == "text":
-                        parts.append(inline.get("text") or "")
-                    elif isinstance(inline, dict) and "text" in inline:
-                        parts.append(str(inline["text"]))
-                # Separate blocks with newline
-                parts.append("\n")
-        text = "".join(parts).strip()
-        return text if text else json.dumps(adf)[:500] if adf else ""
-    return str(adf)[:1000]
 
 
 def _extract_rich_fields(issue: dict, field_validator: FieldValidator) -> dict:
@@ -39,7 +17,7 @@ def _extract_rich_fields(issue: dict, field_validator: FieldValidator) -> dict:
     fields = issue.get("fields", {}) or {}
     # Core rich fields that exist on every issue — previously not persisted (caused blank details)
     summary = fields.get("summary", "") or ""
-    description = _adf_to_text(fields.get("description"))
+    description = adf_to_text(fields.get("description"))
     priority = (fields.get("priority") or {}).get("name", "") if isinstance(fields.get("priority"), dict) else ""
     issuetype = (fields.get("issuetype") or {}).get("name", "") if isinstance(fields.get("issuetype"), dict) else ""
     jira_status = (fields.get("status") or {}).get("name", "") if isinstance(fields.get("status"), dict) else ""
@@ -134,9 +112,19 @@ class JiraSyncService:
             return "skipped_no_key"
         # Existing record check
         existing = await self.rab_repo.get_record(issue_key)
-        # Validate via field_validator (uses same logic as webhook)
+        # Validate via field_validator (advisory by default per drawio: GET and NOTE, not hard FAIL)
         validation = self.field_validator.validate(issue)
         rich = _extract_rich_fields(issue, self.field_validator)
+        # Advisory: when valid True but missing_fields present, store as validated_with_notes with audit detail (not blank)
+        if validation.valid and validation.missing_fields:
+            status_val = "validated_with_notes"
+            val_detail = validation.detail  # advisory audit: Present/Missing
+        elif validation.valid:
+            status_val = "validated"
+            val_detail = ""
+        else:
+            status_val = "validation_failed"
+            val_detail = validation.detail
         data: dict = {
             "summary": rich["summary"],
             "description": rich["description"],
@@ -149,8 +137,8 @@ class JiraSyncService:
             "assignee": rich["assignee"],
             "jira_updated": rich["jira_updated"],
             "raw_fields": rich["raw_fields"],
-            "validation_result": validation.detail if not validation.valid else "",
-            "status": "validated" if validation.valid else "validation_failed",
+            "validation_result": val_detail,
+            "status": status_val,
         }
         # Preserve approval/meeting state if already tracked — don't overwrite status
         # if the issue is already in an approval/flow state

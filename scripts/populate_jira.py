@@ -75,37 +75,45 @@ _RAB_DETAILS_BLOCK = """RAB Details (embedded in description so dashboard shows 
 """
 
 # Synthetic ticket definitions covering different RAB validation scenarios
-# Each now includes a rich description so previously-blank dashboard detail is populated.
+# Updated for advisory GET-and-NOTE (per data structure.drawio.html): not every ticket must have all 12 RAB fields.
+# - validated: all 12 present (full RAB block)
+# - validated_with_notes: some missing but workflow continues (advisory, missing noted in validation_result)
+# - minimal: tests blank-details fix
 TICKET_TEMPLATES = [
     {
         "summary": "RAB-AUTO validated ticket — should pass",
         "description": "All fields present. Created by populate_jira.py to verify Jira pull works. Has assignee, reporter, summary.",
         "labels": ["rab-auto", "validated"],
         "priority": "High",
+        "mode": "full",  # all 12 RAB fields present
     },
     {
         "summary": "RAB-AUTO release for pipeline v1.2",
         "description": "Release candidate v1.2 — see RAB details below.",
         "labels": ["rab-auto"],
         "priority": "High",
+        "mode": "full",
     },
     {
         "summary": "RAB-AUTO hotfix — missing optional fields",
-        "description": "Minimal hotfix ticket — used to test aging/validation display.",
+        "description": "Minimal hotfix ticket — used to test advisory noting (validated_with_notes).",
         "labels": ["rab-auto", "minimal"],
         "priority": "Medium",
+        "mode": "partial",  # only 4/12 present -> will be validated_with_notes in advisory mode
     },
     {
         "summary": "RAB-AUTO regression test ticket",
         "description": "Created to verify the sync endpoint POST /rab/sync pulls issues regardless of webhook.",
         "labels": ["rab-auto", "sync-test"],
         "priority": "Medium",
+        "mode": "full",
     },
     {
         "summary": "RAB-AUTO aging ticket — will be backdated in demo",
         "description": "Used to test aging approvals KPIs on the dashboard.",
         "labels": ["rab-auto", "aging"],
         "priority": "Low",
+        "mode": "full",
     },
 ]
 
@@ -391,20 +399,35 @@ async def main_async(args: argparse.Namespace) -> None:
                 # Make summary unique with timestamp suffix
                 ts = datetime.now(timezone.utc).strftime("%H%M%S")
                 summary = f"{args.prefix} {i+1}/{args.count} — {tpl['summary']} [{ts}]"
-                # Build rich description that includes all RAB fields so the dashboard detail is not blank
-                rab_block = _RAB_DETAILS_BLOCK.format(
-                    date_time=datetime.now(timezone.utc).isoformat(),
-                    rab_approver="sdl@example.com",
-                    pr_link="https://github.com/example/repo/pull/42",
-                    pipeline_link="https://dev.azure.com/example/pipeline/99",
-                    developer="dev@example.com",
-                    team_lead="lead@example.com",
-                    pm="pm@example.com",
-                    qa="qa@example.com",
-                    environment="staging" if i % 2 == 0 else "production",
-                    rollback="Revert commit / redeploy previous artifact",
-                )
-                description = tpl["description"] + "\n\n" + rab_block + f"\nCreated: {datetime.now(timezone.utc).isoformat()}  template={i % len(TICKET_TEMPLATES)}  assignee_set={'yes' if assignee_id else 'no'}"
+                # Build description per drawio advisory: GET and NOTE present/missing.
+                # mode=full -> all 12 present (validated); mode=partial -> only 4/12 per Power Automate check (RAB, PR Link, Pipeline Link, Team Lead) -> validated_with_notes
+                mode = tpl.get("mode", "full")
+                if mode == "partial":
+                    # Intentionally incomplete to demo validated_with_notes (advisory) — only the 4 Power Automate fields + assignee/reporter/environment
+                    rab_block = (
+                        f"RAB Details (partial — advisory demo):\n"
+                        f"- RAB Approver: sdl@example.com\n"
+                        f"- PR Link: https://github.com/example/repo/pull/42\n"
+                        f"- Pipeline Link: https://dev.azure.com/example/pipeline/99\n"
+                        f"- Team Lead: lead@example.com\n"
+                        f"- Environment: staging\n"
+                    )
+                else:
+                    rab_block = _RAB_DETAILS_BLOCK.format(
+                        date_time=datetime.now(timezone.utc).isoformat(),
+                        rab_approver="sdl@example.com",
+                        pr_link="https://github.com/example/repo/pull/42",
+                        pipeline_link="https://dev.azure.com/example/pipeline/99",
+                        developer="dev@example.com",
+                        team_lead="lead@example.com",
+                        pm="pm@example.com",
+                        qa="qa@example.com",
+                        environment="staging" if i % 2 == 0 else "production",
+                        rollback="Revert commit / redeploy previous artifact",
+                    )
+                # For advisory demo, also add blast radius image note to mirror drawio Attachments
+                extra_note = "Attachments: blast radius image attached (simulated)" if mode == "full" else "Attachments: none — will be noted as missing"
+                description = tpl["description"] + "\n\n" + rab_block + f"\n{extra_note}\nCreated: {datetime.now(timezone.utc).isoformat()}  template={i % len(TICKET_TEMPLATES)}  mode={mode}  assignee_set={'yes' if assignee_id else 'no'}"
                 try:
                     data = await create_issue(client, args.project, summary, description, labels=tpl.get("labels"), assignee_account_id=assignee_id, priority=tpl.get("priority"))
                     created_keys.append(data["key"])
