@@ -55,6 +55,8 @@ class TestDatabase:
             "creator", "assignee",
             # Rich fields added to fix blank-details (previously only summary/creator/assignee were persisted)
             "description", "priority", "issuetype", "jira_status", "labels", "reporter", "jira_updated", "raw_fields",
+            "deployment_instructions", "outcome_notes", "rollback_strategy", "mitigation_strategy",
+            "related_release_reference", "release_outcome", "environments", "development", "parent_reference", "sprint",
         }
         assert col_names == expected
 

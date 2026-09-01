@@ -54,6 +54,7 @@ def _extract_rich_fields(issue: dict, field_validator: FieldValidator) -> dict:
     raw_fields = json.dumps(
         {
             "rab_fields": rab_snapshot,
+            "ticket_structure": field_validator.extract_ticket_structure(issue),
             "field_map": getattr(field_validator, "field_map", {}),
             "description_present": bool(description),
             "labels": labels,
@@ -73,6 +74,7 @@ def _extract_rich_fields(issue: dict, field_validator: FieldValidator) -> dict:
         "assignee": assignee,
         "jira_updated": jira_updated,
         "raw_fields": raw_fields,
+        **{key if key != "parent" else "parent_reference": (value or "") for key, value in field_validator.extract_ticket_structure(issue).items()},
     }
 
 logger = logging.getLogger(__name__)
@@ -137,6 +139,16 @@ class JiraSyncService:
             "assignee": rich["assignee"],
             "jira_updated": rich["jira_updated"],
             "raw_fields": rich["raw_fields"],
+            "deployment_instructions": rich.get("deployment_instructions", ""),
+            "outcome_notes": rich.get("outcome_notes", ""),
+            "rollback_strategy": rich.get("rollback_strategy", ""),
+            "mitigation_strategy": rich.get("mitigation_strategy", ""),
+            "related_release_reference": rich.get("related_release_reference", ""),
+            "release_outcome": rich.get("release_outcome", ""),
+            "environments": rich.get("environments", ""),
+            "development": rich.get("development", ""),
+            "parent_reference": rich.get("parent_reference", ""),
+            "sprint": rich.get("sprint", ""),
             "validation_result": val_detail,
             "status": status_val,
         }

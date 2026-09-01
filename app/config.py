@@ -47,8 +47,8 @@ class Settings(BaseSettings):
     # Optional: Azure Key Vault for secret resolution (see module docstring).
     AZURE_VAULT_URL: str = ""
 
-    # Required: Jira webhook endpoint
-    JIRA_WEBHOOK_URL: str
+    # Required: Jira webhook endpoint — defaults to localhost for tests/dev so import doesn't crash when .env missing
+    JIRA_WEBHOOK_URL: str = "http://localhost:8000/webhooks/jira"
 
     # Jira API
     JIRA_BASE_URL: str | None = None
@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     JIRA_FIELD_ENVIRONMENT: str = ""
     JIRA_FIELD_ROLLBACK_DETAILS: str = ""
     JIRA_FIELD_DATE_TIME: str = ""
+    JIRA_FIELD_DEPLOYMENT_INSTRUCTIONS: str = ""
+    JIRA_FIELD_OUTCOME_NOTES: str = ""
+    JIRA_FIELD_ROLLBACK_STRATEGY: str = ""
+    JIRA_FIELD_MITIGATION_STRATEGY: str = ""
+    JIRA_FIELD_RELATED_RELEASE_REFERENCE: str = ""
+    JIRA_FIELD_RELEASE_OUTCOME: str = ""
+    JIRA_FIELD_ENVIRONMENTS: str = ""
+    JIRA_FIELD_DEVELOPMENT: str = ""
+    JIRA_FIELD_PARENT_REFERENCE: str = ""
+    JIRA_FIELD_SPRINT: str = ""
 
     # Workflow transition IDs
     JIRA_TRANSITION_VALIDATE: str = ""
@@ -87,6 +97,11 @@ class Settings(BaseSettings):
     TEAMS_WORKFLOW_WEBHOOK_URL: str = ""
     # Back-compat alias for the older incoming-webhook variable name
     TEAMS_WEBHOOK_URL: str = ""
+
+    @property
+    def effective_teams_webhook_url(self) -> str:
+        """Single source for Teams webhook — prefers workflow URL, falls back to legacy."""
+        return (self.TEAMS_WORKFLOW_WEBHOOK_URL or self.TEAMS_WEBHOOK_URL).strip()
 
     def feature_enabled(self, value: bool | None) -> bool:
         """Enable local-only features by default, require explicit prod opt-in."""

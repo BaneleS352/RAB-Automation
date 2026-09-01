@@ -41,6 +41,16 @@ class RabRecord(BaseModel):
     reporter: str = ""
     jira_updated: str = ""
     raw_fields: str = ""
+    deployment_instructions: str = ""
+    outcome_notes: str = ""
+    rollback_strategy: str = ""
+    mitigation_strategy: str = ""
+    related_release_reference: str = ""
+    release_outcome: str = ""
+    environments: str = ""
+    development: str = ""
+    parent_reference: str = ""
+    sprint: str = ""
 
 
 class RabRecordList(BaseModel):

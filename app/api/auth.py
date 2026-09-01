@@ -27,7 +27,9 @@ class AccessTokenMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        token = get_settings().ACCESS_TOKEN
+        # Use app.state.settings (set at startup) to avoid per-request file I/O (was get_settings() each time)
+        settings = getattr(request.app.state, "settings", None)
+        token = settings.ACCESS_TOKEN if settings else get_settings().ACCESS_TOKEN
         if not token:
             return await call_next(request)
 

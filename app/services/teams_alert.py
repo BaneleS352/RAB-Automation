@@ -109,8 +109,7 @@ async def send_release_ready_alert(issue_key: str, summary: str = "", details: d
     transition still commits.
     """
     settings = get_settings()
-    # Prefer the experiment's variable, fall back to legacy TEAMS_WEBHOOK_URL for backwards compat
-    webhook_url = settings.TEAMS_WORKFLOW_WEBHOOK_URL or settings.TEAMS_WEBHOOK_URL  # type: ignore[attr-defined]
+    webhook_url = settings.effective_teams_webhook_url
     if not webhook_url:
         logger.info("Teams release alert skipped for %s — TEAMS_WORKFLOW_WEBHOOK_URL not configured (alerting basis only)", issue_key)
         return False
