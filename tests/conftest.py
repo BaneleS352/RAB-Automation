@@ -28,9 +28,19 @@ def _clear_settings_cache() -> None:
         get_settings.cache_clear()  # type: ignore[attr-defined]
     except AttributeError:
         pass
+    try:
+        from app.config import _resolve_vault_secrets
+        _resolve_vault_secrets.cache_clear()  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
     yield
     try:
         get_settings.cache_clear()  # type: ignore[attr-defined]
+    except AttributeError:
+        pass
+    try:
+        from app.config import _resolve_vault_secrets
+        _resolve_vault_secrets.cache_clear()  # type: ignore[attr-defined]
     except AttributeError:
         pass
 

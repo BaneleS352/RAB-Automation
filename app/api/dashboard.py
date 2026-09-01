@@ -46,7 +46,7 @@ def _require_feature(request: Request, feature: str) -> None:
 
 
 async def _check_connection_status() -> dict:
-    """Connection status for Jira, cached to avoid hammering
+    """Connection status for Jira + Teams, cached to avoid hammering
     the external API on every page load / 30s auto-refresh."""
     now = time.monotonic()
     if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
@@ -58,13 +58,23 @@ async def _check_connection_status() -> dict:
         if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
             return _health_cache["services"]
         jira_status = await _jira.check_connection()
+        # Teams is alerting-only; check if workflow webhook is configured
+        from app.config import get_settings
+        from app.services.config_warnings import get_config_warnings as _cw
+        settings = get_settings()
+        teams_url = settings.TEAMS_WORKFLOW_WEBHOOK_URL or settings.TEAMS_WEBHOOK_URL
+        if teams_url:
+            teams_status = {"connected": True, "details": "Teams workflow webhook configured — release_ready alerts enabled (alerting basis)"}
+        else:
+            teams_status = {"connected": False, "details": "Teams workflow webhook not configured — release_ready alerts skipped (set TEAMS_WORKFLOW_WEBHOOK_URL)"}
         details = jira_status.get("details", "Unknown")
-        warnings = _config_warnings()
+        warnings = _cw()
         if warnings:
             details += " | Config warnings: " + "; ".join(warnings)
 
         services = {
             "jira": {"connected": jira_status.get("connected", False), "details": details},
+            "teams": {"connected": teams_status["connected"], "details": teams_status["details"]},
             "_warnings": warnings,
         }
         _health_cache["at"] = now

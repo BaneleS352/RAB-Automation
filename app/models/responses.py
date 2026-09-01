@@ -10,6 +10,13 @@ class JiraConnectionInfo(BaseModel):
     details: str
 
 
+class TeamsConnectionInfo(BaseModel):
+    """Teams workflow webhook status (alerting basis only)."""
+
+    connected: bool
+    details: str
+
+
 class HealthResponse(BaseModel):
     """Response model for the health check endpoint."""
 
@@ -17,6 +24,7 @@ class HealthResponse(BaseModel):
     service: str
     environment: str
     jira: JiraConnectionInfo | None = None
+    teams: TeamsConnectionInfo | None = None
 
     model_config = {"exclude_defaults": True}
 

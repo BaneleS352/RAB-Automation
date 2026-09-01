@@ -89,18 +89,18 @@ class FieldValidator:
         """Parse RAB field values embedded in description text (e.g., 'PR Link: https://...')."""
         import re
 
-        # Map logical keys to patterns found in the RAB details block
+        # Map logical keys to patterns found in the RAB details block — anchored to line start to avoid capturing trailing fields
         patterns: dict[str, list[str]] = {
-            "pr_link": [r"PR Link:\s*(.+)", r"PR:\s*(https?://\S+)"],
-            "pipeline_link": [r"Pipeline Link:\s*(.+)", r"Pipeline:\s*(https?://\S+)"],
-            "rab_approver": [r"RAB Approver:\s*(.+)", r"Approver:\s*(.+)"],
-            "developer": [r"Developer:\s*(.+)", r"Dev:\s*(.+)"],
-            "team_lead": [r"Team Lead:\s*(.+)", r"TeamLead:\s*(.+)"],
-            "pm": [r"\bPM:\s*(.+)", r"Project Manager:\s*(.+)"],
-            "qa": [r"\bQA:\s*(.+)", r"QA Engineer:\s*(.+)"],
-            "environment": [r"Environment:\s*(.+)", r"Env:\s*(.+)"],
-            "rollback_details": [r"Rollback(?:/Mitigation)?:\s*(.+)", r"Mitigation:\s*(.+)"],
-            "date_time": [r"Date/Time:\s*(.+)", r"Date:\s*(.+)"],
+            "pr_link": [r"(?:^|\n)PR Link:\s*([^\n]+)", r"(?:^|\n)PR:\s*(https?://\S+)"],
+            "pipeline_link": [r"(?:^|\n)Pipeline Link:\s*([^\n]+)", r"(?:^|\n)Pipeline:\s*(https?://\S+)"],
+            "rab_approver": [r"(?:^|\n)RAB Approver:\s*([^\n]+)", r"(?:^|\n)Approver:\s*([^\n]+)"],
+            "developer": [r"(?:^|\n)Developer:\s*([^\n]+)", r"(?:^|\n)Dev:\s*([^\n]+)"],
+            "team_lead": [r"(?:^|\n)Team Lead:\s*([^\n]+)", r"(?:^|\n)TeamLead:\s*([^\n]+)"],
+            "pm": [r"(?:^|\n)PM:\s*([^\n]+)", r"(?:^|\n)Project Manager:\s*([^\n]+)"],
+            "qa": [r"(?:^|\n)QA:\s*([^\n]+)", r"(?:^|\n)QA Engineer:\s*([^\n]+)"],
+            "environment": [r"(?:^|\n)Environment:\s*([^\n]+)", r"(?:^|\n)Env:\s*([^\n]+)"],
+            "rollback_details": [r"(?:^|\n)Rollback(?:/Mitigation)?:\s*([^\n]+)", r"(?:^|\n)Mitigation:\s*([^\n]+)"],
+            "date_time": [r"(?:^|\n)Date/Time:\s*([^\n]+)", r"(?:^|\n)Date:\s*([^\n]+)"],
         }
         candidates = patterns.get(field_key, [])
         for pat in candidates:
@@ -161,14 +161,15 @@ class FieldValidator:
         audit = self.audit(issue_data)
         missing: list[str] = audit["missing"]  # type: ignore
         present: list[str] = audit["present"]  # type: ignore
+        present_values: dict[str, str] = audit["present_values"]  # type: ignore
 
-        # Log mapping fallback usage (was silent blank before)
+        # Log mapping fallback usage (was silent blank before) — reuse audit results to avoid double parse (was 24 ADF parses)
         for display_name, field_key in REQUIRED_FIELDS:
             mapped = self.field_map.get(field_key)
-            value = self.extract_field_value(issue_data, field_key)
-            if mapped is None and value:
-                logger.debug("Field '%s' satisfied via description fallback (no JIRA_FIELD_* mapping): %s", display_name, value[:60])
-            elif mapped is None and not value:
+            in_present = display_name in present
+            if mapped is None and in_present:
+                logger.debug("Field '%s' satisfied via description fallback (no JIRA_FIELD_* mapping): %s", display_name, present_values.get(display_name, "")[:60])
+            elif mapped is None and not in_present:
                 logger.info("Field '%s' has no JIRA_FIELD_* mapping and no description fallback — will be reported as missing", display_name)
 
         # Advisory mode (default, per user request + drawio): GET ticket and NOTE present/missing, do not block workflow

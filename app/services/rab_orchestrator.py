@@ -101,69 +101,84 @@ class RabOrchestrator:
 
         if event_type is not None and event_type not in _START_EVENT_TYPES:
             logger.info("Event %s is not a workflow-starting event for %s — monitoring only", event_type, issue_key)
+            # Fetch outside lock to avoid blocking concurrent webhooks for same key during network I/O
+            issue_data = await self._fetch_issue(issue_key)
+            if not issue_data:
+                return "monitored"
+            validation = self.field_validator.validate(issue_data)
+            rich = _extract_rich_fields_orch(issue_data, self.field_validator)
+            # Advisory: always NOTE present/missing (per drawio: GET and NOTE), do not hard-fail on missing.
+            # Store advisory detail even when valid but with missing_fields so dashboard shows completeness.
+            strict = bool(getattr(get_settings(), "RAB_STRICT_VALIDATION", False))
+            if strict:
+                val_result = validation.detail if not validation.valid else ""
+                status = "validated" if validation.valid else "validation_failed"
+            else:
+                # Advisory: validated_with_notes when any missing, else validated
+                if validation.missing_fields:
+                    val_result = validation.detail
+                    status = "validated_with_notes"
+                else:
+                    val_result = ""
+                    status = "validated"
             lock = await _get_issue_lock(issue_key)
             async with lock:
-                issue_data = await self._fetch_issue(issue_key)
-                if issue_data:
-                    validation = self.field_validator.validate(issue_data)
-                    rich = _extract_rich_fields_orch(issue_data, self.field_validator)
-                    # Advisory: always NOTE present/missing (per drawio: GET and NOTE), do not hard-fail on missing.
-                    # Store advisory detail even when valid but with missing_fields so dashboard shows completeness.
-                    strict = bool(getattr(get_settings(), "RAB_STRICT_VALIDATION", False))
-                    if strict:
-                        val_result = validation.detail if not validation.valid else ""
-                        status = "validated" if validation.valid else "validation_failed"
-                    else:
-                        # Advisory: validated_with_notes when any missing, else validated
-                        if validation.missing_fields:
-                            val_result = validation.detail
-                            status = "validated_with_notes"
-                        else:
-                            val_result = ""
-                            status = "validated"
-                    await self.rab_repo.upsert_record(issue_key, {
-                        "summary": rich["summary"],
-                        "description": rich["description"],
-                        "priority": rich["priority"],
-                        "issuetype": rich["issuetype"],
-                        "jira_status": rich["jira_status"],
-                        "labels": rich["labels"],
-                        "reporter": rich["reporter"],
-                        "creator": rich["creator"],
-                        "assignee": rich["assignee"],
-                        "jira_updated": rich["jira_updated"],
-                        "raw_fields": rich["raw_fields"],
-                        "validation_result": val_result,
-                        "status": status,
-                    })
-                    existing = await self.rab_repo.get_record(issue_key)
-                    if existing and existing.get("status") in FLOW_STATUSES:
-                        await self.rab_repo.upsert_record(issue_key, {"status": existing["status"]})
+                # Single write: preserve flow status if already in flow, else use new validation status
+                existing = await self.rab_repo.get_record(issue_key)
+                if existing and existing.get("status") in FLOW_STATUSES:
+                    status = existing["status"]
+                    # Keep existing validation_result if flow already started? No, update with new audit
+                await self.rab_repo.upsert_record(issue_key, {
+                    "summary": rich["summary"],
+                    "description": rich["description"],
+                    "priority": rich["priority"],
+                    "issuetype": rich["issuetype"],
+                    "jira_status": rich["jira_status"],
+                    "labels": rich["labels"],
+                    "reporter": rich["reporter"],
+                    "creator": rich["creator"],
+                    "assignee": rich["assignee"],
+                    "jira_updated": rich["jira_updated"],
+                    "raw_fields": rich["raw_fields"],
+                    "validation_result": val_result,
+                    "status": status,
+                })
             return "monitored"
+
+        # Fast path: check in-memory/DB without lock first to avoid holding lock during Jira fetch
+        existing = self.approval_service.get_approval(issue_key)
+        if existing is not None:
+            logger.info("Workflow already started for %s — ignoring start event %s", issue_key, event_type)
+            return "already_in_progress"
+        record = await self.rab_repo.get_record(issue_key)
+        if record and (
+            record.get("sdl_approval") in ("requested", "approved", "rejected")
+            or record.get("sdm_approval") in ("requested", "approved", "rejected")
+        ):
+            logger.info("Workflow already started for %s — ignoring start event %s (DB)", issue_key, event_type)
+            self.approval_service.load_from_record(record)
+            return "already_in_progress"
+
+        issue_data = await self._fetch_issue(issue_key)
+        if not issue_data:
+            return "error_fetching_issue_data"
 
         lock = await _get_issue_lock(issue_key)
         async with lock:
+            # Re-check after acquiring lock (double-checked locking) to handle race where concurrent start created approval between fetch and lock
             existing = self.approval_service.get_approval(issue_key)
             if existing is not None:
-                # Approval already exists in the service store — workflow already started
-                logger.info("Workflow already started for %s — ignoring start event %s", issue_key, event_type)
+                logger.info("Workflow already started for %s — ignoring start event %s (race)", issue_key, event_type)
                 return "already_in_progress"
-            # No approval in store — check the raw DB record
             record = await self.rab_repo.get_record(issue_key)
             if record and (
                 record.get("sdl_approval") in ("requested", "approved", "rejected")
                 or record.get("sdm_approval") in ("requested", "approved", "rejected")
             ):
-                # DB record indicates an approval was previously started
-                logger.info("Workflow already started for %s — ignoring start event %s", issue_key, event_type)
-                # Hydrate the approval state from the DB record so subsequent logic works
-                existing = self.approval_service.load_from_record(record)
+                logger.info("Workflow already started for %s — ignoring start event %s (race DB)", issue_key, event_type)
+                self.approval_service.load_from_record(record)
                 return "already_in_progress"
-            # No prior state — proceed with new workflow
-
-            issue_data = await self._fetch_issue(issue_key)
-            if not issue_data:
-                return "error_fetching_issue_data"
+            # No prior state — proceed with new workflow (validation and rich fields already fetched)
 
             validation = self.field_validator.validate(issue_data)
             rich = _extract_rich_fields_orch(issue_data, self.field_validator)
