@@ -101,6 +101,16 @@ class FieldValidator:
             "environment": [r"(?:^|\n)Environment:\s*([^\n]+)", r"(?:^|\n)Env:\s*([^\n]+)"],
             "rollback_details": [r"(?:^|\n)Rollback(?:/Mitigation)?:\s*([^\n]+)", r"(?:^|\n)Mitigation:\s*([^\n]+)"],
             "date_time": [r"(?:^|\n)Date/Time:\s*([^\n]+)", r"(?:^|\n)Date:\s*([^\n]+)"],
+            "deployment_instructions": [r"(?:^|\n)Deployment Instructions:\s*([^\n]+)"],
+            "outcome_notes": [r"(?:^|\n)Outcome Notes:\s*([^\n]+)"],
+            "rollback_strategy": [r"(?:^|\n)Rollback Strategy:\s*([^\n]+)"],
+            "mitigation_strategy": [r"(?:^|\n)Mitigation Strategy:\s*([^\n]+)"],
+            "related_release_reference": [r"(?:^|\n)Related Release Reference:\s*([^\n]+)"],
+            "release_outcome": [r"(?:^|\n)Release Outcome:\s*([^\n]+)"],
+            "environments": [r"(?:^|\n)Environments?:\s*([^\n]+)"],
+            "development": [r"(?:^|\n)Development:\s*([^\n]+)"],
+            "parent": [r"(?:^|\n)Parent:\s*([^\n]+)"],
+            "sprint": [r"(?:^|\n)Sprint:\s*([^\n]+)"],
         }
         candidates = patterns.get(field_key, [])
         for pat in candidates:
@@ -156,6 +166,46 @@ class FieldValidator:
             else:
                 missing.append(display_name)
         return {"present": present, "missing": missing, "present_values": present_values}
+
+    def extract_ticket_structure(self, issue_data: dict) -> dict[str, str | None]:
+        """Extract the XML-defined ticket fields that are not workflow gates.
+
+        These values are deliberately kept as a normalized snapshot: Jira
+        installations commonly represent them as custom fields with different
+        IDs, while some teams keep them in the description.  The required RAB
+        fields continue to use ``extract_field_value`` so existing mappings and
+        validation semantics are unchanged.
+        """
+        from app.services.jira_fields import adf_to_text
+
+        fields = issue_data.get("fields", {}) or {}
+        aliases = {
+            "deployment_instructions": ("deployment_instructions", "customfield_deployment_instructions"),
+            "outcome_notes": ("outcome_notes", "customfield_outcome_notes"),
+            "rollback_strategy": ("rollback_strategy", "customfield_rollback_strategy"),
+            "mitigation_strategy": ("mitigation_strategy", "customfield_mitigation_strategy"),
+            "related_release_reference": ("related_release_reference", "customfield_related_release_reference"),
+            "release_outcome": ("release_outcome", "customfield_release_outcome"),
+            "environments": ("environment", "environments", "customfield_environments"),
+            "development": ("development", "customfield_development"),
+            "parent": ("parent", "customfield_parent"),
+            "sprint": ("sprint", "customfield_sprint"),
+        }
+        result: dict[str, str | None] = {}
+        description = adf_to_text(fields.get("description"))
+        for logical, keys in aliases.items():
+            value = None
+            configured = getattr(self.settings, f"JIRA_FIELD_{logical.upper()}", "")
+            lookup_keys = ((configured,) if configured else ()) + keys
+            for key in lookup_keys:
+                if key in fields:
+                    value = self._normalize(fields.get(key))
+                    if value:
+                        break
+            if not value and description:
+                value = self._extract_from_description(description, logical)
+            result[logical] = value
+        return result
 
     def validate(self, issue_data: dict) -> ValidationResult:
         audit = self.audit(issue_data)

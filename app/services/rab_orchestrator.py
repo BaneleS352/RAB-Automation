@@ -38,7 +38,14 @@ def _extract_rich_fields_orch(issue: dict, fv: FieldValidator) -> dict:
             rab_snapshot[key] = fv.extract_field_value(issue, key)
         except Exception:
             rab_snapshot[key] = None
-    raw_fields = json.dumps({"rab_fields": rab_snapshot, "field_map": getattr(fv, "field_map", {}), "labels": labels}, ensure_ascii=False)[:4000]
+    structure_extractor = getattr(fv, "extract_ticket_structure", None)
+    ticket_structure = structure_extractor(issue) if callable(structure_extractor) else {}
+    raw_fields = json.dumps({
+        "rab_fields": rab_snapshot,
+        "ticket_structure": ticket_structure,
+        "field_map": getattr(fv, "field_map", {}),
+        "labels": labels,
+    }, ensure_ascii=False)[:4000]
     return {
         "summary": summary,
         "description": description[:2000],
@@ -51,6 +58,7 @@ def _extract_rich_fields_orch(issue: dict, fv: FieldValidator) -> dict:
         "assignee": assignee,
         "jira_updated": jira_updated,
         "raw_fields": raw_fields,
+        **{key if key != "parent" else "parent_reference": (value or "") for key, value in ticket_structure.items()},
     }
 
 logger = logging.getLogger(__name__)
@@ -195,6 +203,16 @@ class RabOrchestrator:
                 "assignee": rich["assignee"],
                 "jira_updated": rich["jira_updated"],
                 "raw_fields": rich["raw_fields"],
+                "deployment_instructions": rich.get("deployment_instructions", ""),
+                "outcome_notes": rich.get("outcome_notes", ""),
+                "rollback_strategy": rich.get("rollback_strategy", ""),
+                "mitigation_strategy": rich.get("mitigation_strategy", ""),
+                "related_release_reference": rich.get("related_release_reference", ""),
+                "release_outcome": rich.get("release_outcome", ""),
+                "environments": rich.get("environments", ""),
+                "development": rich.get("development", ""),
+                "parent_reference": rich.get("parent_reference", ""),
+                "sprint": rich.get("sprint", ""),
             })
             # Advisory: when valid True but missing fields, store as validated_with_notes (per drawio: GET and NOTE)
             if validation.valid and validation.missing_fields:

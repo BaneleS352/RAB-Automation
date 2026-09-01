@@ -19,6 +19,8 @@ ALLOWED_RAB_COLUMNS = frozenset({
     "rejection_reason", "rejected_by", "meeting_needed",
     # Rich Jira fields — persisted so dashboard no longer shows blank details
     "description", "priority", "issuetype", "jira_status", "labels", "reporter", "jira_updated", "raw_fields",
+    "deployment_instructions", "outcome_notes", "rollback_strategy", "mitigation_strategy",
+    "related_release_reference", "release_outcome", "environments", "development", "parent_reference", "sprint",
 })
 
 ALLOWED_EVENT_COLUMNS = frozenset({"issue_key", "step", "action", "approver", "reason"})
