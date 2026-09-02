@@ -95,13 +95,14 @@ async def _process_webhook(
 
     changelog = payload.model_extra.get("changelog")
     if not changelog or not isinstance(changelog.get("items"), list) or not changelog.get("items"):
-        logger.info("Webhook for %s has no changelog (Jira webhook may not be configured to send changelog — field_changes will be empty; configure Jira webhook to 'Send changelog' or rely on sync)", issue_key)
+        logger.info("Webhook for %s has no changelog; configure Jira webhook to send changelog for field history", issue_key)
     await rab_repo.record_field_changes(issue_key, changelog)
 
     result = await orchestrator.handle_jira_event(
         issue_key=issue_key,
         event_type=payload.webhookEvent,
     )
+    await rab_repo.mark_jira_seen(issue_key)
 
     logger.info("Orchestration result for %s: %s", issue_key, result)
     await rab_repo.update_webhook_event_status(event_id, result)

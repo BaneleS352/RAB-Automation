@@ -103,6 +103,10 @@ async def _migrate(db: aiosqlite.Connection) -> None:
                    "parent_reference", "sprint"):
         if column not in columns:
             await db.execute(f"ALTER TABLE rab_records ADD COLUMN {column} TEXT DEFAULT ''")
+    if "jira_exists" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN jira_exists INTEGER NOT NULL DEFAULT 1")
+    if "jira_last_seen" not in columns:
+        await db.execute("ALTER TABLE rab_records ADD COLUMN jira_last_seen TEXT DEFAULT ''")
     # Systemic fix: issue_key should be unique; previously only a non-unique index existed,
     # allowing silent duplicate rows on concurrent webhooks (similar to blank-details silent duplication).
     # Deduplicate keeping latest row, then enforce uniqueness and drop redundant non-unique index.
@@ -161,6 +165,8 @@ async def init_db() -> None:
             development     TEXT DEFAULT '',
             parent_reference TEXT DEFAULT '',
             sprint          TEXT DEFAULT '',
+            jira_exists     INTEGER NOT NULL DEFAULT 1,
+            jira_last_seen  TEXT DEFAULT '',
             created_at      TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
         );

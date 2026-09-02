@@ -22,6 +22,10 @@
                 <span class="badge badge-{{ record.status | replace('_', '-') }}">{{ record.status }}</span>
             </div>
             <div class="detail-item">
+                <span class="detail-label">Jira Record</span>
+                {% if record.jira_exists %}<span class="badge badge-approved">Existing in Jira</span>{% else %}<span class="badge badge-rejected">Removed from Jira</span>{% endif %}
+            </div>
+            <div class="detail-item">
                 <span class="detail-label">Summary</span>
                 <span style="font-weight:500;">{{ record.summary or '—' }}</span>
             </div>
@@ -63,7 +67,7 @@
             </div>
             <div class="detail-item detail-item-full">
                 <span class="detail-label">Description</span>
-                <span style="white-space:pre-wrap; max-height:220px; overflow:auto; display:block; background:var(--surface-2, #f8f8f8); padding:0.6rem; border-radius:6px;">{{ record.description or '— (blank: Jira description is empty or was not synced — re-sync to populate)' }}</span>
+                <span style="white-space:pre-wrap; max-height:220px; overflow:auto; display:block; background:var(--surface-2, #f8f8f8); padding:0.6rem; border-radius:6px;">{{ record.description or '— (blank: Jira description is empty)' }}</span>
             </div>
             <div class="detail-item detail-item-full">
                 <span class="detail-label">Validation Result</span>
@@ -71,7 +75,7 @@
                 {% if record.raw_fields %}
                 <details style="margin-top:0.6rem;"><summary style="cursor:pointer; font-size:0.84rem; color:var(--muted);">Show RAB field snapshot (why details may appear blank)</summary>
                     <pre style="white-space:pre-wrap; font-size:0.78rem; background:var(--surface-2, #f5f5f5); padding:0.6rem; border-radius:6px; margin-top:0.4rem; max-height:260px; overflow:auto;">{{ record.raw_fields }}</pre>
-                    <p style="font-size:0.78rem; color:var(--muted); margin-top:0.4rem;">Blank RAB fields (PR Link, Pipeline Link, RAB Approver, Developer, Team Lead, PM, QA, Environment, Rollback, Date/Time) mean their JIRA_FIELD_* env mappings are empty (<code>.env</code>) so the validator skips them — not that Jira rejected the sync. Set <code>JIRA_FIELD_PR_LINK=customfield_XXXX</code> etc. and re-sync to populate those columns, or store those values in the Jira description/labels which are now persisted and shown above.</p>
+                    <p style="font-size:0.78rem; color:var(--muted); margin-top:0.4rem;">Blank RAB fields mean their JIRA_FIELD_* env mappings are empty (<code>.env</code>) or Jira has no value. Set <code>JIRA_FIELD_PR_LINK=customfield_XXXX</code> etc., or store those values in the Jira description/labels.</p>
                 </details>
                 {% endif %}
             </div>
@@ -112,7 +116,7 @@
         {% for e in events %}<div class="activity-row"><span class="activity-dot activity-{{ e.action }}"></span><div><strong>{{ e.step }} {{ e.action }}</strong><small>{{ e.created_at[:19] | replace('T', ' ') }}{% if e.approver %} · {{ e.approver }}{% endif %}</small></div></div>{% endfor %}
         {% for e in webhook_events[:5] %}<div class="activity-row"><span class="activity-dot activity-webhook"></span><div><strong>{{ e.event_type or 'Webhook received' }}</strong><small>{{ e.created_at[:19] | replace('T', ' ') }} · {{ e.status }}</small></div></div>{% endfor %}
         {% for e in field_changes %}<div class="activity-row"><span class="activity-dot activity-change"></span><div><strong>{{ e.field }} changed</strong><small>{{ e.from_value or 'empty' }} → {{ e.to_value or 'empty' }}{% if e.author %} · {{ e.author }}{% endif %}</small></div></div>{% endfor %}
-        <p class="audit-note">Jira description, priority, issue type, status, labels, reporter and creator are now persisted on sync (previously only summary/assignee/creator). Blank fields above mean Jira returned empty for that issue — re-sync after updating Jira. RAB-specific fields (PR Link etc.) appear blank when their <code>JIRA_FIELD_*</code> mappings are unset.</p>
+        <p class="audit-note">Jira presence is updated by the live feed and webhooks. A record marked “Removed from Jira” remains in the audit trail for historical traceability and is not deleted locally.</p>
     </div></div>
 </div>
 <p class="muted" style="margin-top:1rem;"><a href="/rab/records/{{ record.issue_key }}">View JSON API record →</a> • <a href="/dashboard/records">Back to issues</a></p>

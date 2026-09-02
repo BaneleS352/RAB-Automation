@@ -169,28 +169,12 @@ async def dashboard_metrics(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(request, "metrics.html", {"metrics": data})
 
 
-@router.get("/sync", response_class=HTMLResponse)
-async def dashboard_sync_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "sync.html", {"result": None})
-
-
-@router.post("/sync", response_class=HTMLResponse)
-async def dashboard_sync_run(request: Request) -> HTMLResponse:
-    from app.services.jira_sync import JiraSyncService
-
-    service = JiraSyncService()
-    result = await service.sync_all()
-    counts = await _repo.get_status_counts()
-    total = sum(counts.values())
-    return templates.TemplateResponse(request, "sync.html", {"result": result, "total": total})
-
-
 @router.get("/tools", response_class=HTMLResponse)
 async def dashboard_tools(request: Request) -> HTMLResponse:
     _require_feature(request, "ENABLE_DEMO")
     data = get_metrics_data()
     events = await _repo.get_webhook_events(limit=20)
-    return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": None, "seed_results": None, "sync_result": None})
+    return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": None})
 
 
 @router.post("/tools", response_class=HTMLResponse)
@@ -207,24 +191,7 @@ async def dashboard_tools_run(
     data = get_metrics_data()
     events = await _repo.get_webhook_events(limit=20)
     result = None
-    seed_results = None
-    sync_result = None
-    # Sync — now live feed is primary, manual sync kept as fallback
-    if action == "sync":
-        from app.services.jira_sync import JiraSyncService
-        sync_result = await JiraSyncService().sync_all()
-        events = await _repo.get_webhook_events(limit=20)
-    # Demo seed — supports real Jira tickets when use_real_jira checked and Jira configured
-    elif action == "seed":
-        # Detect real Jira availability for banner
-        from app.config import get_settings
-        s = get_settings()
-        real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
-        # If user ticked real Jira but it's not configured, fall back to stub and surface warning via seed_results
-        seed_results = await DummyFlowService.seed_demo_dataset(use_real_jira=use_real_jira and real_available)
-        events = await _repo.get_webhook_events(limit=20)
-    # Demo single scenarios
-    elif action in ("pending_sdl", "pending_sdm", "validation_failed", "aging"):
+    if action in ("pending_sdl", "pending_sdm", "validation_failed", "aging"):
         svc = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=use_real_jira)
         if action == "pending_sdl":
             result = await svc.run_pending_sdl()
@@ -252,7 +219,7 @@ async def dashboard_tools_run(
             result = await svc.run_aging_pending(days=3)
         else:
             result = await svc.run_full_approval(needs_meeting=needs_meeting)
-    return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": result, "seed_results": seed_results, "sync_result": sync_result})
+    return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": result})
 
 
 @router.get("/demo", response_class=HTMLResponse)
@@ -270,16 +237,11 @@ async def dashboard_demo_form(
     from app.config import get_settings
     s = get_settings()
     real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
-    # Seed dataset via GET for convenience: /dashboard/demo?scenario=seed
-    seed_results = None
-    if scenario == "seed":
-        seed_results = []  # populated on POST; GET just shows CTA
     return templates.TemplateResponse(
         request,
         "demo.html",
         {
             "result": None,
-            "seed_results": seed_results,
             "issue_key": issue_key,
             "summary": summary,
             "needs_meeting": needs_meeting,
@@ -306,26 +268,10 @@ async def dashboard_demo_run(
     from app.config import get_settings
     s = get_settings()
     real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
-    eff_real = bool(use_real_jira and real_available)
-    # Seed full dataset
-    if scenario == "seed":
-        results = await DummyFlowService.seed_demo_dataset(use_real_jira=eff_real)
-        return templates.TemplateResponse(
-            request,
-            "demo.html",
-            {
-                "result": None,
-                "seed_results": results,
-                "issue_key": issue_key,
-                "summary": summary,
-                "needs_meeting": needs_meeting,
-                "reject": reject,
-                "scenario": scenario,
-                "use_real_jira": use_real_jira,
-                "real_available": real_available,
-            },
-        )
-    service = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=eff_real)
+    try:
+        service = DummyFlowService(issue_key=issue_key, summary=summary)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     # Scenario takes precedence over legacy reject/needs_meeting flags
     if scenario == "pending_sdl":
         result = await service.run_pending_sdl()
@@ -350,7 +296,6 @@ async def dashboard_demo_run(
         "demo.html",
         {
             "result": result,
-            "seed_results": None,
             "issue_key": issue_key,
             "summary": summary,
             "needs_meeting": needs_meeting,

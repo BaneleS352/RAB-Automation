@@ -51,6 +51,8 @@ class RabRecord(BaseModel):
     development: str = ""
     parent_reference: str = ""
     sprint: str = ""
+    jira_exists: int = 1
+    jira_last_seen: str = ""
 
 
 class RabRecordList(BaseModel):
@@ -172,7 +174,13 @@ async def live_jira_feed(project_key: str | None = None, limit: int = Query(20, 
     key = project_key or jira.settings.JIRA_PROJECT_KEY
     try:
         if key:
-            issues = await jira.list_project_issues(key, max_results=limit)
+            issues = await jira.list_project_issues(key, max_results=100)
+            # Live Jira is the source of truth. Reconcile only the configured
+            # project so historical local records can be labeled as removed.
+            await _repo.mark_missing_from_jira(key, {it.get("key") for it in issues if it.get("key")})
+            for it in issues:
+                if it.get("key"):
+                    await _repo.mark_jira_seen(it["key"])
         else:
             data = await jira.search_issues("ORDER BY updated DESC", max_results=limit)
             issues = data.get("issues", [])
@@ -194,17 +202,3 @@ async def live_jira_feed(project_key: str | None = None, limit: int = Query(20, 
         return {"live": False, "issues": [], "detail": str(e)[:200]}
 
 
-@router.post("/sync")
-async def sync_jira(project_key: str | None = None) -> dict:
-    """Sync all Jira issues for project into local monitor (regardless of creation method)."""
-    from app.services.jira_sync import JiraSyncService
-
-    service = JiraSyncService()
-    result = await service.sync_project(project_key) if project_key else await service.sync_all()
-    return {
-        "synced": result.synced,
-        "created": result.created,
-        "updated": result.updated,
-        "failed": result.failed,
-        "errors": result.errors[:5],
-    }

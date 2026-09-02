@@ -5,7 +5,7 @@ def get_config_warnings() -> list[str]:
     s = get_settings()
     warns: list[str] = []
     if not s.JIRA_PROJECT_KEY:
-        warns.append("JIRA_PROJECT_KEY empty — sync falls back to unfiltered 'ORDER BY updated DESC' (cross-project, first 100)")
+        warns.append("JIRA_PROJECT_KEY is empty — live feed uses recent Jira issues across projects")
     field_vars = [
         "JIRA_FIELD_DATE_TIME", "JIRA_FIELD_RAB_APPROVER", "JIRA_FIELD_PR_LINK", "JIRA_FIELD_PIPELINE_LINK",
         "JIRA_FIELD_DEVELOPER", "JIRA_FIELD_TEAM_LEAD", "JIRA_FIELD_PM", "JIRA_FIELD_QA",

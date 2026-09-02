@@ -258,8 +258,8 @@ Pipeline status counts and aging approvals, used by the dashboard overview.
 
 ### `GET /demo/flow`
 
-Runs a **simulated** full RAB workflow against a stub Jira client — no external
-calls, but it produces real `INFO` logs and real audit records.
+Creates a live Jira ticket and runs the RAB workflow against it, producing real
+`INFO` logs and audit records.
 
 **Query params:**
 

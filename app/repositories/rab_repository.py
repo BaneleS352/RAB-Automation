@@ -21,6 +21,7 @@ ALLOWED_RAB_COLUMNS = frozenset({
     "description", "priority", "issuetype", "jira_status", "labels", "reporter", "jira_updated", "raw_fields",
     "deployment_instructions", "outcome_notes", "rollback_strategy", "mitigation_strategy",
     "related_release_reference", "release_outcome", "environments", "development", "parent_reference", "sprint",
+    "jira_exists", "jira_last_seen",
 })
 
 ALLOWED_EVENT_COLUMNS = frozenset({"issue_key", "step", "action", "approver", "reason"})
@@ -36,6 +37,9 @@ class RabRepository:
 
     async def upsert_record(self, issue_key: str, data: dict) -> int:
         self._validate_columns(data, ALLOWED_RAB_COLUMNS)
+        # Demo records are local simulations, never Jira issues.
+        if issue_key.startswith("DEMO-"):
+            data = {**data, "jira_exists": 0, "jira_last_seen": ""}
         db = await get_db()
         now = datetime.now(timezone.utc).isoformat()
         # Use INSERT ... ON CONFLICT to avoid race where two concurrent webhooks both see no existing and insert duplicate
@@ -145,6 +149,30 @@ class RabRepository:
                 return False
             logger.exception("Unexpected error recording webhook event: %s", e)
             raise
+
+    async def mark_jira_seen(self, issue_key: str) -> None:
+        db = await get_db()
+        await db.execute(
+            "UPDATE rab_records SET jira_exists = 1, jira_last_seen = datetime('now'), updated_at = updated_at WHERE issue_key = ?",
+            (issue_key,),
+        )
+        await db.commit()
+
+    async def mark_missing_from_jira(self, project_key: str, issue_keys: set[str]) -> int:
+        """Mark locally tracked issues absent from the live Jira project view as removed."""
+        db = await get_db()
+        rows = await db.execute_fetchall(
+            "SELECT issue_key FROM rab_records WHERE issue_key LIKE ?",
+            (f"{project_key}-%",),
+        )
+        missing = [r[0] for r in rows if r[0] not in issue_keys]
+        if missing:
+            await db.executemany(
+                "UPDATE rab_records SET jira_exists = 0, updated_at = updated_at WHERE issue_key = ?",
+                [(key,) for key in missing],
+            )
+            await db.commit()
+        return len(missing)
 
     async def record_field_changes(self, issue_key: str, changelog: dict | None) -> None:
         if not changelog or not isinstance(changelog.get("items"), list):

@@ -57,6 +57,7 @@ class TestDatabase:
             "description", "priority", "issuetype", "jira_status", "labels", "reporter", "jira_updated", "raw_fields",
             "deployment_instructions", "outcome_notes", "rollback_strategy", "mitigation_strategy",
             "related_release_reference", "release_outcome", "environments", "development", "parent_reference", "sprint",
+            "jira_exists", "jira_last_seen",
         }
         assert col_names == expected
 

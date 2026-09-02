@@ -10,21 +10,20 @@
     <a class="btn btn-ghost btn-sm" href="/dashboard/health">← Overview</a>
 </div>
 
-<div class="tool-intro"><strong>Choose an operational area</strong><span>Demo Lab simulates flows, Jira Sync backfills issues, and the ledger and metrics support observability.</span></div>
+<div class="tool-intro"><strong>Choose an operational area</strong><span>The live feed and webhook ledger provide current Jira and processing state.</span></div>
 <!-- Demo Lab -->
 <div class="card" style="margin-top:1rem;">
     <div class="card-header">
         <h3>Demo Lab</h3>
-        <span class="muted" style="font-size:0.8rem;">Seed pipeline with synthetic issues</span>
+        <span class="muted" style="font-size:0.8rem;">Create and iterate synthetic Jira scenarios</span>
     </div>
     <div class="card-body">
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.9rem; align-items:center;">
-            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="seed"><input type="hidden" name="use_real_jira" class="tools-real-input" value=""><button class="btn btn-primary btn-sm">Seed full dataset (8 issues) →</button></form>
             <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdl"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDL"><input type="hidden" name="use_real_jira" class="tools-real-input" value=""><button class="btn btn-outline btn-sm">Pending SDL</button></form>
             <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdm"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDM"><input type="hidden" name="use_real_jira" class="tools-real-input" value=""><button class="btn btn-outline btn-sm">Pending SDM</button></form>
             <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="validation_failed"><input type="hidden" name="issue_key" value="DEMO-FAIL"><input type="hidden" name="use_real_jira" class="tools-real-input" value=""><button class="btn btn-outline btn-sm">Validation failed</button></form>
             <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="aging"><input type="hidden" name="issue_key" value="DEMO-AGING"><input type="hidden" name="use_real_jira" class="tools-real-input" value=""><button class="btn btn-outline btn-sm">Aging</button></form>
-            <span class="muted" style="font-size:0.75rem;">Live: <label class="field checkbox-field" style="display:inline-flex; padding:0.2rem 0.5rem; margin:0;"><input type="checkbox" id="tools-real-toggle" onchange="document.querySelectorAll('.tools-real-input').forEach(el=>el.value=this.checked?'true':'')"><span>Use real Jira tickets</span></label> <span style="font-size:0.7rem;">(creates live TEST issues instead of DEMO- stub)</span></span>
+            <span class="badge">Live Jira only — each run creates a Jira ticket</span>
         </div>
         <form method="post" action="/dashboard/tools" style="display:flex; flex-wrap:wrap; gap:0.9rem; align-items:flex-end; padding-top:0.9rem; border-top:1px solid var(--border);">
             <input type="hidden" name="action" value="custom">
@@ -52,10 +51,7 @@
                 <input type="checkbox" name="needs_meeting" value="true">
                 <span>Meeting</span>
             </label>
-            <label class="field checkbox-field" title="Create real Jira issue">
-                <input type="checkbox" name="use_real_jira" value="true">
-                <span>Real Jira</span>
-            </label>
+            <span class="muted" title="Demo Lab always creates live Jira tickets">Jira ticket creation is enabled</span>
             <button type="submit" class="btn btn-primary btn-sm">Run →</button>
         </form>
         {% if result %}
@@ -67,29 +63,10 @@
             <div style="margin-top:0.5rem; display:flex; gap:0.5rem;"><a class="btn btn-primary btn-sm" href="/dashboard/records/{{ result.issue_key }}">View record</a><a class="btn btn-ghost btn-sm" href="/dashboard/health">Overview</a></div>
         </div>
         {% endif %}
-        {% if seed_results %}
-        <div style="margin-top:0.9rem; padding:0.75rem; background:var(--success-soft); border:1px solid var(--success-border); border-radius:var(--radius);">
-            <strong>Seeded {{ seed_results|length }} issues</strong> — <a href="/dashboard/health">View pipeline KPIs</a> • <a href="/dashboard/records">Browse issues</a>
-        </div>
-        {% endif %}
     </div>
 </div>
-
-<!-- Sync + Metrics row -->
-<div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-top:1rem;">
-    <div class="card">
-        <div class="card-header"><h3>Jira Sync</h3><span class="muted" style="font-size:0.8rem;">All creation methods</span></div>
-        <div class="card-body">
-            <p class="muted" style="margin:0 0 0.75rem; font-size:0.85rem;">Pulls <code>project = JIRA_PROJECT_KEY ORDER BY updated DESC</code> via <code>/rest/api/3/search/jql</code>. Webhook covers live events, sync backfills existing/imported issues.</p>
-            <form method="post" action="/dashboard/tools" style="margin:0;"><input type="hidden" name="action" value="sync"><button type="submit" class="btn btn-outline btn-sm">Sync all Jira issues →</button></form>
-            {% if sync_result %}
-            <div class="tool-sync-result {% if sync_result.failed %}sync-failed{% else %}sync-success{% endif %}">
-                <strong>Sync:</strong> {{ sync_result.synced }} synced • {{ sync_result.created }} created • {{ sync_result.updated }} updated • {{ sync_result.failed }} failed
-                {% if sync_result.errors %}<ul style="margin:0.4rem 0 0 1.1rem;">{% for e in sync_result.errors[:3] %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-            </div>
-            {% endif %}
-        </div>
-    </div>
+<!-- Operational metrics -->
+<div style="display:grid; grid-template-columns: 1fr; gap:1rem; margin-top:1rem;">
     <div class="card">
         <div class="card-header"><h3>Ops Metrics</h3><a class="btn btn-ghost btn-sm" href="/metrics">/metrics JSON</a></div>
         <div class="card-body">
