@@ -57,7 +57,7 @@ under uvicorn's default `SelectorEventLoop` on Windows.
 `/dashboard/demo` provides a form (issue key, summary, meeting-needed and
 reject toggles) that submits to the same `DummyFlowService` used by the raw
 `GET /demo/flow` endpoint. The form runs the **real** orchestrator against a
-stub Jira client — no network calls are made, but every stage is logged at
+live Jira tickets; every stage is logged at
 `INFO` and persisted to the audit trail, exactly like a real ticket.
 
 The raw endpoint:
@@ -84,7 +84,7 @@ curl "http://localhost:8000/rab/records/DEMO-1"
 or open `/dashboard/records`.
 
 The `DummyFlowService` (in `app/services/dummy_flow.py`) reuses
-`RabOrchestrator` with `StubJiraClient` injected. Two run modes:
+`RabOrchestrator` with a live `JiraClient`. Two run modes:
 
 - `run_full_approval(needs_meeting)` — validation → SDL approve → SDM approve →
   meeting decision.

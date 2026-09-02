@@ -5,23 +5,23 @@
     <button class="menu-button" id="menuButton" aria-label="Toggle menu">☰</button>
     <div>
         <h1>Demo Approval Flow</h1>
-        <p class="muted" style="margin:0;">Seed the monitor with synthetic Jira issues. Each run creates a real audit record that appears in <a href="/dashboard/records">Audit Records</a> and <a href="/dashboard/health">Overview</a> pipeline summary.</p>
+        <p class="muted" style="margin:0;">Exercise one ticket through the approval lifecycle. Each run creates one auditable scenario.</p>
     </div>
     <a class="btn btn-ghost btn-sm" href="/dashboard/demo">Reset</a>
 </div>
 
-<!-- Seed dataset CTA — now real Jira when checked -->
+{% if false %}<!-- Seed dataset CTA — removed: no database-only issue seeding -->
 <div class="card" style="margin-top:1rem; border-color: var(--primary); background: linear-gradient(135deg, var(--primary-soft) 0%, #fff 60%);">
     <div class="card-body" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
         <div>
             <strong style="font-size:0.95rem;">Populate the whole pipeline</strong>
-            <p class="muted" style="margin:0.2rem 0 0;">Creates 8 issues covering every status — pending SDL/SDM, validation failed, validated with notes (advisory), rejected, release ready, meeting scheduled, aging. <strong>Real Jira</strong> creates live tickets in <code>{{ 'TEST' if real_available else 'Jira (not configured)' }}</code> via <code>JiraClient.create_issue</code> with RAB Details block; stub is local-only.</p>
-            {% if not real_available %}<p class="muted" style="margin:0.2rem 0 0; color:var(--warning);">Jira not configured — real mode will fallback to stub. Set <code>JIRA_BASE_URL</code> + creds in <code>.env</code>.</p>{% endif %}
+            <p class="muted" style="margin:0.2rem 0 0;">Creates one live Jira ticket in <code>{{ 'TEST' if real_available else 'the configured Jira project' }}</code> for each scenario, then runs the approval workflow against that ticket.</p>
+            {% if not real_available %}<p class="muted" style="margin:0.2rem 0 0; color:var(--warning);">Jira is not configured. Set <code>JIRA_BASE_URL</code>, <code>JIRA_EMAIL</code>, and <code>JIRA_API_TOKEN</code> before running Demo Lab.</p>{% endif %}
         </div>
         <form method="post" action="/dashboard/demo" style="margin:0; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
             <input type="hidden" name="scenario" value="seed">
             <input type="hidden" name="issue_key" value="DEMO-SEED">
-            <label class="field checkbox-field" style="margin:0;"><input type="checkbox" name="use_real_jira" value="true" {% if use_real_jira %}checked{% endif %} {% if not real_available %}disabled{% endif %}><span>Use real Jira tickets</span></label>
+            <span class="badge">Live Jira only</span>
             <button type="submit" class="btn btn-primary">Seed demo dataset →</button>
         </form>
     </div>
@@ -54,7 +54,7 @@
         </div>
     </div>
 </div>
-{% endif %}
+{% endif %}{% endif %}
 
 <div class="card" style="margin-top:1rem;">
     <div class="card-header">
@@ -89,8 +89,7 @@
                 <span>Meeting needed</span>
             </label>
             <label class="field checkbox-field" title="Create real Jira issue via Jira API (requires Jira config)">
-                <input type="checkbox" name="use_real_jira" value="true" {% if use_real_jira %}checked{% endif %} {% if not real_available %}disabled{% endif %}>
-                <span>Use real Jira ticket</span>
+                <span>Live Jira ticket will be created</span>
             </label>
             <!-- legacy reject checkbox kept hidden for backward compat but scenario is preferred -->
             <input type="hidden" name="reject" value="{% if reject %}true{% endif %}">
@@ -103,7 +102,7 @@
             <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-FAIL"><input type="hidden" name="scenario" value="validation_failed"><button class="btn btn-outline btn-sm">Validation failed</button></form>
             <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-AGING"><input type="hidden" name="scenario" value="aging"><button class="btn btn-outline btn-sm">Aging</button></form>
         </div>
-        <p class="muted" style="margin-top:0.75rem;">No external services needed — uses a stub Jira client. Every scenario persists to the audit trail.</p>
+        <p class="muted" style="margin-top:0.75rem;">Every run creates or reuses a live Jira ticket, then persists the resulting audit trail locally.</p>
     </div>
 </div>
 
@@ -142,7 +141,7 @@
 </div>
 {% elif not seed_results %}
 <div class="empty-state" style="margin-top:1rem;">
-    <div style="font-size:1.2rem; margin-bottom:0.4rem;">▶ Run the flow to seed data</div>
+    <div style="font-size:1.2rem; margin-bottom:0.4rem;">▶ Run a ticket scenario</div>
     <span class="muted">Each run persists to the audit trail and updates the <a href="/dashboard/health">pipeline summary</a> KPIs.</span>
 </div>
 {% endif %}

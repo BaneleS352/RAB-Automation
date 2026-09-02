@@ -28,7 +28,10 @@ async def run_demo_flow(
 ) -> dict:
     """Run a full simulated SDL → SDM approval flow and return the step log."""
     _require_demo(request)
-    service = DummyFlowService(issue_key=issue_key, summary=summary)
+    try:
+        service = DummyFlowService(issue_key=issue_key, summary=summary)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     if reject:
         result = await service.run_rejection()
     else:

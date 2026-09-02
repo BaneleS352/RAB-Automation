@@ -61,7 +61,7 @@ All are aggregated in `app/api/routes.py`.
 ### `rab_orchestrator.py` — `RabOrchestrator`
 
 Central workflow coordinator. Accepts optional injected collaborators so tests
-and the dummy flow can substitute stubs:
+and Demo Lab scenarios use live Jira tickets:
 
 ```python
 RabOrchestrator(
@@ -143,8 +143,8 @@ idempotent; `stop()` guards against a not-running worker.
 
 ### `dummy_flow.py` — `DummyFlowService`
 
-Demo-only: runs the real orchestrator with a `StubJiraClient` to exercise the
-full lifecycle without external calls. See [Dashboard & Demo](dashboard.md).
+Demo Lab: creates a live Jira ticket, then runs the real orchestrator through
+the selected lifecycle scenario. See [Dashboard & Demo](dashboard.md).
 
 ### `test_runner.py`
 

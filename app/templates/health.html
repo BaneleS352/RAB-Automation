@@ -9,7 +9,6 @@
         <p class="muted" style="margin:0;">Real-time Jira RAB pipeline — approvals tracked in Jira, monitored here.</p>
     </div>
     <div class="page-header-actions">
-        <a class="btn btn-outline btn-sm" href="/dashboard/sync">Sync Jira issues</a>
         <a class="btn btn-outline btn-sm" href="/dashboard/demo">Populate demo data</a>
         <a class="btn btn-ghost btn-sm" href="/dashboard/health">↻ Refresh</a>
     </div>
@@ -49,7 +48,7 @@
     <ul style="margin: 0.4rem 0 0 1.2rem; color:#856404; font-size: 0.88rem;">
         {% for w in services.get('_warnings') %}<li>{{ w }}</li>{% endfor %}
     </ul>
-    <small style="color:#856404;">Fix: set the corresponding <code>JIRA_FIELD_*</code> / <code>JIRA_PROJECT_KEY</code> / <code>JIRA_TRANSITION_*</code> in <code>.env</code> and re-sync.</small>
+    <small style="color:#856404;">Fix: set the corresponding <code>JIRA_FIELD_*</code> / <code>JIRA_PROJECT_KEY</code> / <code>JIRA_TRANSITION_*</code> in <code>.env</code>, then send a Jira webhook or open the live feed.</small>
 </div>
 {% endif %}
 <div class="health-grid">
@@ -66,7 +65,7 @@
 </div>
 
 <h2 class="section-title">Pipeline Summary <span class="section-kicker">decision-oriented</span></h2>
-<p class="muted" style="margin-top:-0.6rem; margin-bottom:0.7rem;">Populated from audit records — run the <a href="/dashboard/demo">demo</a> to seed data.</p>
+<p class="muted" style="margin-top:-0.6rem; margin-bottom:0.7rem;">Populated from Jira webhook events and live Jira-backed Demo Lab runs.</p>
 <div class="kpi-grid">
     <div class="kpi-card">
         <div class="kpi-top"><span class="kpi-icon">◈</span><span class="muted" style="font-size:0.72rem;">all</span></div>

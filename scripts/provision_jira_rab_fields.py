@@ -2,7 +2,7 @@
 
 The script is idempotent: existing fields are reused by exact name. Jira admin
 permissions are required. It does not change tickets; use the printed mappings
-with the ticket migration/sync process after provisioning.
+with the live Jira webhook and feed after provisioning.
 
 Usage: python scripts/provision_jira_rab_fields.py [--project TEST]
 """

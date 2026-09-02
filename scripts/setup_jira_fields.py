@@ -5,7 +5,7 @@ shows which RAB logical fields are empty vs mapped, and prints recommended .env 
 
 Also explains the new description fallback: when a JIRA_FIELD_* is empty, the validator
 now parses the Jira issue description for a "RAB Details" block (populated by
-populate_jira.py), so tickets no longer appear blank even without custom fields.
+the Demo Lab), so tickets no longer appear blank even without custom fields.
 
 Usage:
   python scripts/setup_jira_fields.py
@@ -132,12 +132,12 @@ def print_report(fields):
             print(f"{env}={cur}  # already mapped")
     print()
     print("Fallback behavior (no .env change needed):")
-    print("  populate_jira.py now embeds a 'RAB Details' block in each issue description")
+    print("  Demo Lab live Jira scenarios embed a 'RAB Details' block in each issue description")
     print("  with all 10 fields. FieldValidator now parses that block when env is empty,")
     print("  so tickets will validate and dashboard will show details instead of blank.")
     print()
     print("Next step to verify:")
-    print("  python scripts/populate_jira.py --project TEST --count 1 --sync")
+    print("  Open /dashboard/tools and enable 'Use real Jira tickets' in Demo Lab")
     print("  python -c \"from app.services.field_validator import FieldValidator; fv=FieldValidator(); print(fv.field_map)\"")
     print("="*70)
 

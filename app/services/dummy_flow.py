@@ -1,9 +1,4 @@
-"""Simulated RAB approval flow for demos — produces real logs and audit records.
-
-Reuses the real RabOrchestrator but replaces the Jira client with a stub so
-the full lifecycle runs without any external network calls. Every stage is
-logged at INFO and persisted through RabRepository just like a real ticket.
-"""
+"""Demo Lab scenarios backed exclusively by live Jira tickets."""
 
 import logging
 from dataclasses import dataclass, field
@@ -11,48 +6,11 @@ from dataclasses import dataclass, field
 from app.repositories.rab_repository import RabRepository
 from app.services.approval_service import ApprovalService
 from app.services.rab_orchestrator import RabOrchestrator
+from app.services.jira_client import JiraClient
+from app.services.field_validator import FieldValidator
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
-
-
-class StubJiraClient:
-    """In-memory Jira client that always returns valid issue data."""
-
-    def __init__(self, issue_key: str, summary: str) -> None:
-        self.issue_key = issue_key
-        self.summary = summary
-
-    async def get_issue(self, issue_key: str) -> dict:
-        logger.info("[DUMMY] Fetching issue %s from stub Jira", issue_key)
-        # Return rich fields so dashboard no longer shows blank details for dummy tickets (same fix as real Jira sync)
-        return {
-            "key": self.issue_key,
-            "fields": {
-                "summary": self.summary,
-                "description": {
-                    "type": "doc",
-                    "version": 1,
-                    "content": [{"type": "paragraph", "content": [{"type": "text", "text": f"{self.summary} — demo ticket with rich details (priority High, labels demo)"}]}],
-                },
-                "assignee": {"displayName": "Demo Dev"},
-                "reporter": {"displayName": "Demo PM"},
-                "creator": {"displayName": "Demo Creator"},
-                "priority": {"name": "High"},
-                "issuetype": {"name": "Task"},
-                "status": {"name": "Open"},
-                "labels": ["demo", "rab-auto"],
-                "updated": "2026-08-28T11:45:00.000+0000",
-            },
-        }
-
-    async def add_comment(self, issue_key: str, body: str) -> dict:
-        first_line = body.splitlines()[0] if body else ""
-        logger.info("[DUMMY] Jira comment on %s: %s", issue_key, first_line)
-        return {}
-
-    async def transition_issue(self, issue_key: str, transition_id: str) -> dict:
-        logger.info("[DUMMY] Jira transition on %s: id=%s (no-op stub)", issue_key, transition_id)
-        return {}
 
 
 @dataclass
@@ -83,38 +41,21 @@ class _DemoPartialValidator:
 
 
 class DummyFlowService:
-    """Runs the full SDL → SDM → meeting RAB workflow against stub services.
-    Now also supports real Jira tickets when use_real_jira=True (per demo lab switch).
-    """
+    """Runs Demo Lab scenarios against live Jira; local-only tickets are disabled."""
 
-    def __init__(self, issue_key: str = "DEMO-1", summary: str = "Demo release ticket", use_real_jira: bool = False) -> None:
+    def __init__(self, issue_key: str = "DEMO-1", summary: str = "Demo release ticket", use_real_jira: bool = True) -> None:
         self.issue_key = issue_key
         self.summary = summary
-        self.use_real_jira = use_real_jira
+        self.creator_name = "Demo Creator"
+        self.use_real_jira = True
         self.approval_service = ApprovalService()
         self.rab_repo = RabRepository()
-        # Switch from stub to real Jira when requested and configured
-        if use_real_jira:
-            from app.services.jira_client import JiraClient
-            from app.services.field_validator import FieldValidator
-            from app.config import get_settings
-
-            settings = get_settings()
-            jira_client = JiraClient()
-            # If Jira not configured, fall back to stub and warn
-            if not jira_client.base_url or not jira_client.email or not jira_client.api_token:
-                logger.warning("Demo Lab real Jira requested but Jira not configured — falling back to stub for %s", issue_key)
-                jira_client = StubJiraClient(issue_key, summary)
-                validator = _DemoPassValidator()
-                self._real_project = None
-            else:
-                # Real tickets use the real advisory validator (GET and NOTE per drawio) so missing fields are noted, not stubbed
-                validator = FieldValidator()
-                self._real_project = settings.JIRA_PROJECT_KEY or "TEST"
-        else:
-            jira_client = StubJiraClient(issue_key, summary)
-            validator = _DemoPassValidator()
-            self._real_project = None
+        settings = get_settings()
+        jira_client = JiraClient()
+        if not jira_client.base_url or not jira_client.email or not jira_client.api_token:
+            raise RuntimeError("Demo Lab requires configured Jira credentials; local-only synthetic tickets are disabled")
+        validator = FieldValidator()
+        self._real_project = settings.JIRA_PROJECT_KEY or "TEST"
 
         self.orchestrator = RabOrchestrator(
             jira_client=jira_client,
@@ -125,19 +66,17 @@ class DummyFlowService:
         self.steps: list[dict] = []
 
     def _log(self, step: str, detail: str) -> None:
-        logger.info("[DUMMY] %s: %s", step, detail)
+        logger.info("[DEMO_LAB] %s: %s", step, detail)
         self.steps.append({"step": step, "detail": detail})
 
     async def _ensure_real_issue(self) -> None:
-        """When use_real_jira=True, create a real Jira issue and switch self.issue_key to it."""
-        if not getattr(self, "use_real_jira", False):
-            return
-        # Check if jira_client is real (has create_issue and is configured)
+        """Create a live Jira issue for a new demo key, or use the supplied existing Jira key."""
         client = getattr(self.orchestrator, "jira_client", None)
         if not client or not hasattr(client, "create_issue"):
             return
-        # If already a real key (e.g., TEST-123) we already created, don’t recreate each step
-        if self.issue_key and "-" in self.issue_key and not self.issue_key.startswith("DEMO-"):
+        # Keys belonging to the configured project refer to existing Jira issues.
+        # Any other demo key is only a client-side label used to request a new ticket.
+        if self.issue_key and self.issue_key.startswith(f"{self._real_project}-"):
             return
         try:
             from app.config import get_settings
@@ -148,39 +87,58 @@ class DummyFlowService:
             rab_block = (
                 f"RAB Details (demo lab real ticket):\n"
                 f"- Date/Time: {datetime.now(timezone.utc).isoformat()}\n"
-                f"- RAB Approver: sdl@example.com\n"
+                f"- RAB Approver: {self.creator_name}\n"
                 f"- PR Link: https://github.com/example/repo/pull/42\n"
                 f"- Pipeline Link: https://dev.azure.com/example/pipeline/99\n"
-                f"- Developer: dev@example.com\n"
-                f"- Team Lead: lead@example.com\n"
-                f"- PM: pm@example.com\n"
-                f"- QA: qa@example.com\n"
+                f"- Developer: {self.creator_name}\n"
+                f"- Team Lead: {self.creator_name}\n"
+                f"- PM: {self.creator_name}\n"
+                f"- QA: {self.creator_name}\n"
                 f"- Environment: staging\n"
                 f"- Rollback/Mitigation: revert\n"
                 f"Attachments: blast radius image attached (simulated)\n"
             )
             description = f"{self.summary}\n\n{rab_block}"
-            # Try to get assignee accountId from a quick myself call
-            assignee_id = None
-            try:
-                import httpx
-                base = settings.JIRA_BASE_URL
-                if base:
-                    async with httpx.AsyncClient(timeout=10) as c:
-                        r = await c.get(f"{base.rstrip('/')}/rest/api/3/myself", auth=httpx.BasicAuth(settings.JIRA_EMAIL or "", settings.JIRA_API_TOKEN or ""), headers={"Accept":"application/json"})
-                        if r.status_code == 200:
-                            assignee_id = r.json().get("accountId")
-            except Exception:
-                pass
-            result = await client.create_issue(project, self.summary, description, issuetype="Task", labels=["demo", "rab-auto", "real"], priority="Medium", assignee_account_id=assignee_id)
+            custom_fields = {}
+            field_values = {
+                "DATE_TIME": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
+                "RAB_APPROVER": self.creator_name,
+                "PR_LINK": "https://github.com/example/repo/pull/42",
+                "PIPELINE_LINK": "https://dev.azure.com/example/pipeline/99",
+                "DEVELOPER": self.creator_name,
+                "TEAM_LEAD": self.creator_name,
+                "PM": self.creator_name,
+                "QA": self.creator_name,
+                "ENVIRONMENT": "staging",
+                "ROLLBACK_DETAILS": "revert",
+                "DEPLOYMENT_INSTRUCTIONS": "Deploy through the release pipeline.",
+                "OUTCOME_NOTES": "Demo Lab live-ticket scenario.",
+                "ROLLBACK_STRATEGY": "Revert the deployment.",
+                "MITIGATION_STRATEGY": "Pause rollout and notify the team.",
+                "RELATED_RELEASE_REFERENCE": "DEMO-LAB",
+                "RELEASE_OUTCOME": "Pending scenario outcome",
+                "ENVIRONMENTS": "staging",
+                "DEVELOPMENT": self.creator_name,
+            }
+            for name, value in field_values.items():
+                field_id = getattr(settings, f"JIRA_FIELD_{name}", "")
+                if field_id:
+                    custom_fields[field_id] = value
+            # Create with Jira's portable core fields. Priority and assignee are
+            # project-specific and frequently cause create failures; the
+            # workflow can enrich the issue after creation when configured.
+            result = await client.create_issue(
+                project, self.summary, description,
+                issuetype="Task", labels=["demo", "rab-auto", "live-demo"], custom_fields=custom_fields,
+            )
             real_key = result.get("key") or result.get("id")
             if real_key and real_key != self.issue_key:
                 logger.info("Demo Lab real Jira issue created: %s -> %s (project %s)", self.issue_key, real_key, project)
                 # Switch to real key for this run
                 self.issue_key = real_key
-                # Also update the orchestrator's stub client if it was swapped? The orchestrator already has real client, so fetch will work
-        except Exception as e:
-            logger.warning("Demo Lab real Jira creation failed for %s: %s — falling back to stub", self.issue_key, e)
+        except Exception:
+            logger.exception("Demo Lab Jira ticket creation failed for %s", self.issue_key)
+            raise
 
     async def _reset_issue(self) -> None:
         """Clear any prior state for this key so the demo can be re-run."""
@@ -201,12 +159,12 @@ class DummyFlowService:
         self._log("validation", validation)
 
         sdl = await self.orchestrator.handle_approval_callback(
-            self.issue_key, "approve", approver="Demo SDL", reason="Looks good"
+            self.issue_key, "approve", approver=self.creator_name, reason="Looks good"
         )
         self._log("sdl_approval", sdl.get("detail", ""))
 
         sdm = await self.orchestrator.handle_approval_callback(
-            self.issue_key, "approve", approver="Demo SDM", reason="Ship it"
+            self.issue_key, "approve", approver=self.creator_name, reason="Ship it"
         )
         self._log("sdm_approval", sdm.get("detail", ""))
 
@@ -229,7 +187,7 @@ class DummyFlowService:
         self._log("validation", validation)
 
         rejected = await self.orchestrator.handle_approval_callback(
-            self.issue_key, "reject", approver="Demo SDL", reason="Missing rollout plan"
+            self.issue_key, "reject", approver=self.creator_name, reason="Missing rollout plan"
         )
         self._log("sdl_rejection", rejected.get("detail", ""))
 
@@ -258,7 +216,7 @@ class DummyFlowService:
         )
         self._log("validation", validation)
         sdl = await self.orchestrator.handle_approval_callback(
-            self.issue_key, "approve", approver="Demo SDL", reason="Looks good"
+            self.issue_key, "approve", approver=self.creator_name, reason="Looks good"
         )
         self._log("sdl_approval", sdl.get("detail", ""))
         self._log("sdm_pending", "SDM approval requested — awaiting SDM decision")
@@ -284,7 +242,7 @@ class DummyFlowService:
                 def extract_field_value(self, *a, **kw): return None
 
             orch = RabOrchestrator(
-                jira_client=StubJiraClient(self.issue_key, self.summary),
+                jira_client=self.jira_client,
                 approval_service=self.approval_service,
                 rab_repo=self.rab_repo,
                 field_validator=FailingValidator(),
@@ -304,20 +262,8 @@ class DummyFlowService:
         await self._ensure_real_issue()
         await self._reset_issue()
 
-        # Use partial validator + stub that only has 4/12 fields (RAB, PR Link, Pipeline Link, Team Lead) — matches Power Automate check
-        class PartialStubJiraClient(StubJiraClient):
-            async def get_issue(self, issue_key: str) -> dict:
-                base = await super().get_issue(issue_key)
-                # Override to only have 4 RAB fields present in description
-                base["fields"]["description"] = {
-                    "type": "doc",
-                    "version": 1,
-                    "content": [{"type": "paragraph", "content": [{"type": "text", "text": "RAB Approver: sdl@example.com\nPR Link: https://example.com/pr\nPipeline Link: https://example.com/pipe\nTeam Lead: lead@example.com\nEnvironment: staging"}]}],
-                }
-                return base
-
         orch = RabOrchestrator(
-            jira_client=PartialStubJiraClient(self.issue_key, self.summary),
+            jira_client=self.jira_client,
             approval_service=self.approval_service,
             rab_repo=self.rab_repo,
             field_validator=_DemoPartialValidator(),
@@ -333,12 +279,13 @@ class DummyFlowService:
     async def run_sdm_rejection(self) -> DummyFlowResult:
         """Validation → SDL approve → SDM reject."""
         logger.info("Starting SDM rejection flow for %s", self.issue_key)
+        await self._ensure_real_issue()
         await self._reset_issue()
         await self.orchestrator.handle_jira_event(self.issue_key, "jira:issue_created")
         self._log("validation", "approval_requested_sdl")
-        await self.orchestrator.handle_approval_callback(self.issue_key, "approve", approver="Demo SDL", reason="Looks good")
+        await self.orchestrator.handle_approval_callback(self.issue_key, "approve", approver=self.creator_name, reason="Looks good")
         self._log("sdl_approval", "SDL approved — SDM approval requested")
-        rejected = await self.orchestrator.handle_approval_callback(self.issue_key, "reject", approver="Demo SDM", reason="Risk too high")
+        rejected = await self.orchestrator.handle_approval_callback(self.issue_key, "reject", approver=self.creator_name, reason="Risk too high")
         self._log("sdm_rejection", rejected.get("detail", ""))
         return DummyFlowResult(issue_key=self.issue_key, steps=self.steps, status="rejected")
 
@@ -355,42 +302,3 @@ class DummyFlowService:
         self._log("aging", f"Backdated to {days} days ago for waiting list")
         return DummyFlowResult(issue_key=self.issue_key, steps=self.steps, status="pending_sdl")
 
-    @staticmethod
-    async def seed_demo_dataset(use_real_jira: bool = False) -> list["DummyFlowResult"]:
-        """Create a full demo dataset covering every pipeline KPI bucket — updated for advisory GET-and-NOTE.
-        When use_real_jira=True and Jira is configured, creates real Jira issues (TEST project) instead of stub DEMO- keys.
-        """
-        specs = [
-            ("DEMO-PENDING-SDL", "Pending at SDL — needs SDL review", "pending_sdl", {}),
-            ("DEMO-PENDING-SDM", "Pending at SDM — SDL approved", "pending_sdm", {}),
-            ("DEMO-FAILED-1", "Validation failed — missing fields (strict)", "validation_failed", {}),
-            ("DEMO-NOTED-1", "Validated with notes — 8/12 missing (advisory, per drawio)", "validated_with_notes", {}),
-            ("DEMO-REJECT-SDL", "Rejected by SDL", "rejected_sdl", {}),
-            ("DEMO-REJECT-SDM", "Rejected by SDM", "rejected_sdm", {}),
-            ("DEMO-READY-1", "Release ready — no meeting", "full", {"needs_meeting": False}),
-            ("DEMO-MEETING-1", "Meeting scheduled", "full", {"needs_meeting": True}),
-            ("DEMO-AGING-1", "Aging — pending 3 days", "aging", {"days": 3}),
-        ]
-        results: list[DummyFlowResult] = []
-        for key, summary, scenario, kwargs in specs:
-            svc = DummyFlowService(issue_key=key, summary=summary, use_real_jira=use_real_jira)
-            if scenario == "pending_sdl":
-                r = await svc.run_pending_sdl()
-            elif scenario == "pending_sdm":
-                r = await svc.run_pending_sdm()
-            elif scenario == "validation_failed":
-                r = await svc.run_validation_failed()
-            elif scenario == "validated_with_notes":
-                r = await svc.run_validated_with_notes()
-            elif scenario == "rejected_sdl":
-                r = await svc.run_rejection()
-            elif scenario == "rejected_sdm":
-                r = await svc.run_sdm_rejection()
-            elif scenario == "full":
-                r = await svc.run_full_approval(**kwargs)
-            elif scenario == "aging":
-                r = await svc.run_aging_pending(**kwargs)
-            else:
-                r = await svc.run_full_approval()
-            results.append(r)
-        return results

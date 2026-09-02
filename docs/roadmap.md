@@ -44,7 +44,7 @@ documented. The test suite currently contains 163 tests; run `pytest -q` for the
 3. **Run Tests from the dashboard** — isolated subprocess runner with per-test
    breakdown UI.
 4. **Dummy approval flow** — `/demo/flow` end-to-end simulation via the real
-   orchestrator with dependency injection + stub Jira client.
+   orchestrator with dependency injection + live Jira client.
 5. **Documentation** — README + full `docs/` guide set.
 
 ## Known limitations & backlog

@@ -40,7 +40,7 @@ class TestDummyFlowService:
         record = await RabRepository().get_record("DUMMY-R-1")
         assert record["sdl_approval"] == "rejected"
         assert record["status"] == "sdl_rejected"
-        assert record["rejected_by"] == "Demo SDL"
+        assert record["rejected_by"] == "Demo Creator"
 
     @pytest.mark.asyncio
     async def test_records_approval_events(self) -> None:

@@ -149,8 +149,8 @@ class JiraClient:
 
     async def search_issues(self, jql: str, max_results: int = 50, next_page_token: str | None = None, fields: list[str] | None = None) -> dict:
         """Search Jira issues via enhanced search (JQL). Handles pagination via nextPageToken."""
-        # Request all fields so callers (sync, list_project_issues) receive summary/status/assignee etc.
-        # Without explicit fields the enhanced search only returns id, which breaks validation/sync.
+        # Request all fields so callers receive summary/status/assignee and RAB details.
+        # Without explicit fields the enhanced search only returns id.
         if fields is None:
             fields = ["*all"]
         params: dict[str, Any] = {"jql": jql, "maxResults": max_results}
@@ -185,7 +185,7 @@ class JiraClient:
             issues = data.get("issues", [])
             all_issues.extend(issues)
             if len(all_issues) >= 1000:  # safety cap
-                logger.warning("list_project_issues hit safety cap 1000 for project %s — truncated; remaining issues not synced (previously silent truncation)", project_key)
+                logger.warning("list_project_issues hit safety cap 1000 for project %s — truncated", project_key)
                 break
             # Enhanced search uses nextPageToken
             next_token = data.get("nextPageToken")
@@ -205,8 +205,8 @@ class JiraClient:
             break
         return all_issues
 
-    async def create_issue(self, project_key: str, summary: str, description: str | None = None, issuetype: str = "Task", labels: list[str] | None = None, priority: str | None = None, assignee_account_id: str | None = None) -> dict:
-        """Create a real Jira issue (used by Demo Lab when switching from stub to real tickets)."""
+    async def create_issue(self, project_key: str, summary: str, description: str | None = None, issuetype: str = "Task", labels: list[str] | None = None, priority: str | None = None, assignee_account_id: str | None = None, custom_fields: dict[str, Any] | None = None) -> dict:
+        """Create a Jira issue, including configured custom fields when supplied."""
         _validate_project_key(project_key)
         # Build ADF description
         adf = None
@@ -229,6 +229,8 @@ class JiraClient:
             fields["priority"] = {"name": priority}
         if assignee_account_id:
             fields["assignee"] = {"accountId": assignee_account_id}
+        if custom_fields:
+            fields.update({key: value for key, value in custom_fields.items() if value not in (None, "")})
         return await self._post("/rest/api/3/issue", {"fields": fields})
 
     async def check_connection(self) -> dict:
