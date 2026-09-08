@@ -13,7 +13,6 @@ os.environ["DATABASE_PATH"] = os.path.join(
     tempfile.gettempdir(), f"rab_pytest_{uuid.uuid4().hex}.db"
 )
 
-from app.config import get_settings
 from app.database import _get_db_path, init_db, close_db
 from app.api.webhooks import orchestrator
 
@@ -23,25 +22,12 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(autouse=True)
 def _clear_settings_cache() -> None:
-    try:
-        get_settings.cache_clear()  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    try:
-        from app.config import _resolve_vault_secrets
-        _resolve_vault_secrets.cache_clear()  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    # get_settings() is intentionally uncached (tests monkeypatch env per-test),
+    # so only the vault resolver cache needs clearing here.
+    from app.config import _resolve_vault_secrets
+    _resolve_vault_secrets.cache_clear()
     yield
-    try:
-        get_settings.cache_clear()  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
-    try:
-        from app.config import _resolve_vault_secrets
-        _resolve_vault_secrets.cache_clear()  # type: ignore[attr-defined]
-    except AttributeError:
-        pass
+    _resolve_vault_secrets.cache_clear()
 
 
 @pytest.fixture(autouse=True)

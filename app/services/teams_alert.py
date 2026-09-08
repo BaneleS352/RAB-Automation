@@ -40,10 +40,13 @@ def _build_release_card(issue_key: str, summary: str, details: dict[str, Any]) -
     else:
         # No Jira base URL configured — omit the link rather than sending a placeholder host
         facts_seed = []
-    # Dashboard link: only build an absolute URL when the webhook URL has the
-    # expected path; otherwise omit (a relative path is useless inside Teams).
-    dashboard_link: str | None = None
-    if settings.JIRA_WEBHOOK_URL and "/webhooks/jira" in settings.JIRA_WEBHOOK_URL:
+    # Dashboard link: prefer the explicit public base URL; fall back to deriving
+    # it from the webhook URL only when the expected path is present. Otherwise
+    # omit (a relative path is useless inside Teams).
+    if settings.APP_PUBLIC_URL:
+        dashboard_link = f"{settings.APP_PUBLIC_URL.rstrip('/')}/dashboard/records/{issue_key}"
+        actions.append({"type": "Action.OpenUrl", "title": "Open RAB dashboard", "url": dashboard_link})
+    elif settings.JIRA_WEBHOOK_URL and "/webhooks/jira" in settings.JIRA_WEBHOOK_URL:
         dashboard_link = settings.JIRA_WEBHOOK_URL.replace("/webhooks/jira", f"/dashboard/records/{issue_key}")
         actions.append({"type": "Action.OpenUrl", "title": "Open RAB dashboard", "url": dashboard_link})
 

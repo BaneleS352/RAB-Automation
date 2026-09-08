@@ -132,8 +132,10 @@ async def run_test_suite(timeout: int = 120) -> TestRunResult:
     passed, failed, errors, skipped, duration = _parse_summary(output)
     tests = _parse_tests(output)
 
+    # Gate on the exit code as well as parsed counts: a crashed run (exit 2/3/4/5
+    # with unparsable output) yields all-zero counts, which must not read as success.
     result = TestRunResult(
-        success=(failed == 0 and errors == 0),
+        success=(process.returncode == 0 and failed == 0 and errors == 0),
         passed=passed,
         failed=failed,
         errors=errors,

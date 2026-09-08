@@ -127,6 +127,14 @@ async def _migrate(db: aiosqlite.Connection) -> None:
         await db.execute("DROP INDEX IF EXISTS idx_rab_issue")
     except Exception as e:
         logger.warning("Could not create unique index on rab_records.issue_key: %s", e)
+    # The atomic upsert (ON CONFLICT) requires this index: verify it, and fail
+    # fast at startup instead of letting every subsequent write 500.
+    index_rows = await db.execute_fetchall(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'uidx_rab_issue_key'"
+    )
+    if not index_rows:
+        logger.error("UNIQUE index uidx_rab_issue_key is missing after migration — writes would fail")
+        raise RuntimeError("Database migration failed: UNIQUE index uidx_rab_issue_key is missing")
     await db.execute("""CREATE TABLE IF NOT EXISTS field_change_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT, issue_key TEXT NOT NULL, field TEXT NOT NULL,
         from_value TEXT DEFAULT '', to_value TEXT DEFAULT '', author TEXT DEFAULT '',

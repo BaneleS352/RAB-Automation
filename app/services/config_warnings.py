@@ -1,8 +1,11 @@
 """Shared config warnings — single source for health and dashboard (was duplicated)."""
 from app.config import get_settings
 
-def get_config_warnings() -> list[str]:
-    s = get_settings()
+
+def get_config_warnings(settings=None) -> list[str]:
+    """Build config warnings. Accepts a pre-resolved Settings to avoid duplicate
+    .env parses when callers already hold one (pass nothing for the default)."""
+    s = settings if settings is not None else get_settings()
     warns: list[str] = []
     if not s.JIRA_PROJECT_KEY:
         warns.append("JIRA_PROJECT_KEY is empty — live feed uses recent Jira issues across projects")

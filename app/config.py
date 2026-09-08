@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     # Back-compat alias for the older incoming-webhook variable name
     TEAMS_WEBHOOK_URL: str = ""
 
+    # Public base URL of this service (e.g. https://rab.mycompany.com). Used for
+    # absolute links in Teams cards. When empty, cards omit the dashboard action
+    # rather than guessing from JIRA_WEBHOOK_URL (which may have a custom path).
+    APP_PUBLIC_URL: str = ""
+
     @property
     def effective_teams_webhook_url(self) -> str:
         """Single source for Teams webhook — prefers workflow URL, falls back to legacy."""

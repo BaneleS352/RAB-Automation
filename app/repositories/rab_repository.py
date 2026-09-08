@@ -87,6 +87,14 @@ class RabRepository:
     ) -> None:
         self._validate_columns({"step": step, "action": action}, ALLOWED_EVENT_COLUMNS)
         db = await get_db()
+        # Ensure the parent record exists first: otherwise the event row below is
+        # orphaned and the status UPDATE silently affects 0 rows while callers
+        # report success.
+        existing = await db.execute_fetchall(
+            "SELECT id FROM rab_records WHERE issue_key = ?", (issue_key,)
+        )
+        if not existing:
+            await self.upsert_record(issue_key, {"status": "pending"})
         await db.execute(
             "INSERT INTO approval_events (issue_key, step, action, approver, reason) VALUES (?, ?, ?, ?, ?)",
             (issue_key, step, action, approver, reason),
@@ -99,7 +107,7 @@ class RabRepository:
         approval_status = _APPROVAL_STATUS_MAP.get(action, action)
         record_status = f"{step.lower()}_{approval_status}"
         is_reject = action == "reject"
-        await db.execute(
+        cursor = await db.execute(
             f"UPDATE rab_records SET {col} = ?, rejection_reason = ?, rejected_by = ?, status = ?, updated_at = ? WHERE issue_key = ?",
             (
                 approval_status,
@@ -111,6 +119,10 @@ class RabRepository:
             ),
         )
         await db.commit()
+        if cursor.rowcount == 0:
+            # Should be unreachable after the ensure above; fail loudly rather
+            # than returning a success the caller will act on.
+            raise RuntimeError(f"Failed to update approval state for missing issue {issue_key}")
 
     async def record_webhook_event(self, event_id: str, issue_key: str, event_type: str) -> bool:
         db = await get_db()

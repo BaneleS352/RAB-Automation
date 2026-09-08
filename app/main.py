@@ -47,8 +47,11 @@ def create_app() -> FastAPI:
 
     application.include_router(api_router)
     application.include_router(metrics_router)
-    application.add_middleware(MetricsMiddleware)
+    # Order matters: Starlette executes last-added outermost, so MetricsMiddleware
+    # must be added LAST to observe every response — including 401s short-circuited
+    # by AccessTokenMiddleware (previously those rejections bypassed metrics).
     application.add_middleware(AccessTokenMiddleware)
+    application.add_middleware(MetricsMiddleware)
 
     @application.get("/")
     async def root_redirect():

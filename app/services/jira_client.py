@@ -43,8 +43,10 @@ class JiraClientError(Exception):
 class JiraClient:
     """Client for interacting with the Jira REST API."""
 
-    def __init__(self) -> None:
-        self.settings = get_settings()
+    def __init__(self, settings=None) -> None:
+        # Accepts pre-resolved settings so hot paths (health, dashboard) can
+        # share one Settings instead of re-parsing .env per client.
+        self.settings = settings if settings is not None else get_settings()
         self.base_url = self.settings.JIRA_BASE_URL
         self.email = self.settings.JIRA_EMAIL
         self.api_token = self.settings.JIRA_API_TOKEN
@@ -168,9 +170,6 @@ class JiraClient:
         # Without explicit fields the enhanced search only returns id.
         if fields is None:
             fields = ["*all"]
-        params: dict[str, Any] = {"jql": jql, "maxResults": max_results}
-        if next_page_token:
-            params["nextPageToken"] = next_page_token
         # Try enhanced search POST first, fall back to GET /search on 404 only
         try:
             body: dict[str, Any] = {"jql": jql, "maxResults": max_results, "fields": fields}

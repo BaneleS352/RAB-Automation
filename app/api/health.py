@@ -24,14 +24,14 @@ _health_cache: dict = {"at": 0.0, "services": None}
 _health_lock = asyncio.Lock()
 
 
-def _teams_status() -> dict:
+def _teams_status(settings=None) -> dict:
     """Teams workflow webhook status — alerting basis only, not approval gating.
 
     NOTE: `connected` here means "configured" — the workflow URL is never probed
     (a probe POST would fire a real Teams alert). A configured URL can still fail
     at send time (deleted flow, rotated sig); send failures are logged per alert.
     """
-    settings = get_settings()
+    settings = settings if settings is not None else get_settings()
     url = settings.effective_teams_webhook_url
     if not url:
         return {"connected": False, "details": "Teams workflow webhook not configured — release_ready alerts skipped (set TEAMS_WORKFLOW_WEBHOOK_URL, see scripts/send_to_teams.py)"}
@@ -52,9 +52,12 @@ async def _check_services() -> dict:
         now = time.monotonic()
         if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
             return _health_cache["services"]
-        jira_status = await JiraClient().check_connection()
-        teams_status = _teams_status()
-        warnings = _config_warnings()
+        # Resolve settings once and share it: get_settings() re-parses .env on
+        # every call (deliberately uncached for test freshness).
+        settings = get_settings()
+        jira_status = await JiraClient(settings).check_connection()
+        teams_status = _teams_status(settings)
+        warnings = _config_warnings(settings)
         details = jira_status["details"]
         if warnings:
             details += " | Config warnings: " + "; ".join(warnings)

@@ -101,17 +101,18 @@ async def _check_connection_status() -> dict:
         now = time.monotonic()
         if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
             return _health_cache["services"]
-        jira_status = await JiraClient().check_connection()
-        # Teams is alerting-only; check if workflow webhook is configured
+        # Resolve settings once and share it (get_settings() re-parses .env per call).
         from app.config import get_settings
         settings = get_settings()
-        teams_url = settings.TEAMS_WORKFLOW_WEBHOOK_URL or settings.TEAMS_WEBHOOK_URL
+        jira_status = await JiraClient(settings).check_connection()
+        # Teams is alerting-only; check if workflow webhook is configured
+        teams_url = settings.effective_teams_webhook_url
         if teams_url:
             teams_status = {"connected": True, "details": "Teams workflow webhook configured — release_ready alerts enabled (alerting basis)"}
         else:
             teams_status = {"connected": False, "details": "Teams workflow webhook not configured — release_ready alerts skipped (set TEAMS_WORKFLOW_WEBHOOK_URL)"}
         details = jira_status.get("details", "Unknown")
-        warnings = _config_warnings()
+        warnings = _config_warnings(settings)
         if warnings:
             details += " | Config warnings: " + "; ".join(warnings)
 
