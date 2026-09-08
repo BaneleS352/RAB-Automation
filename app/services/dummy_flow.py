@@ -20,6 +20,43 @@ class DummyFlowResult:
     status: str = "ok"
 
 
+class StubJiraClient:
+    """In-memory stub Jira client for offline/tests — performs no network I/O."""
+
+    def __init__(self, issue_key: str, summary: str) -> None:
+        self.issue_key = issue_key
+        self.summary = summary
+
+    async def get_issue(self, issue_key: str) -> dict:
+        logger.info("[DEMO_LAB stub] Fetching issue %s (no network)", issue_key)
+        return {
+            "key": self.issue_key,
+            "fields": {
+                "summary": self.summary,
+                "description": {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [{"type": "paragraph", "content": [{"type": "text", "text": self.summary}]}],
+                },
+                "assignee": {"displayName": "Demo Dev"},
+                "reporter": {"displayName": "Demo PM"},
+                "creator": {"displayName": "Demo Creator"},
+                "status": {"name": "Open"},
+                "issuetype": {"name": "Task"},
+                "priority": {"name": "Medium"},
+                "labels": ["demo"],
+            },
+        }
+
+    async def add_comment(self, issue_key: str, body: str) -> dict:
+        logger.info("[DEMO_LAB stub] Comment on %s (no network)", issue_key)
+        return {}
+
+    async def transition_issue(self, issue_key: str, transition_id: str) -> dict:
+        logger.info("[DEMO_LAB stub] Transition on %s (no network)", issue_key)
+        return {}
+
+
 class _DemoPassValidator:
     """Validator that always passes for demo — avoids fail-closed on missing JIRA_FIELD_* mappings."""
     def validate(self, issue_data: dict):
@@ -43,23 +80,30 @@ class _DemoPartialValidator:
 class DummyFlowService:
     """Runs Demo Lab scenarios against live Jira; local-only tickets are disabled."""
 
-    def __init__(self, issue_key: str = "DEMO-1", summary: str = "Demo release ticket", use_real_jira: bool = True) -> None:
+    def __init__(self, issue_key: str = "DEMO-1", summary: str = "Demo release ticket", use_real_jira: bool = False) -> None:
         self.issue_key = issue_key
         self.summary = summary
         self.creator_name = "Demo Creator"
-        self.use_real_jira = True
+        self.use_real_jira = use_real_jira
         self.approval_service = ApprovalService()
         self.rab_repo = RabRepository()
         settings = get_settings()
-        jira_client = JiraClient()
-        if not jira_client.base_url or not jira_client.email or not jira_client.api_token:
-            raise RuntimeError("Demo Lab requires configured Jira credentials; local-only synthetic tickets are disabled")
-        validator = FieldValidator()
+        if use_real_jira:
+            jira_client = JiraClient()
+            self.jira_client = jira_client
+            if not jira_client.base_url or not jira_client.email or not jira_client.api_token:
+                raise RuntimeError("Demo Lab requires configured Jira credentials; local-only synthetic tickets are disabled")
+            validator: object = FieldValidator()
+        else:
+            stub = StubJiraClient(issue_key, summary)
+            self.jira_client = stub
+            jira_client = stub  # type: ignore[assignment]
+            validator = _DemoPassValidator()
         self._real_project = settings.JIRA_PROJECT_KEY or "TEST"
 
         self.orchestrator = RabOrchestrator(
             jira_client=jira_client,
-            field_validator=validator,
+            field_validator=validator,  # type: ignore[arg-type]
             approval_service=self.approval_service,
             rab_repo=self.rab_repo,
         )
@@ -71,6 +115,8 @@ class DummyFlowService:
 
     async def _ensure_real_issue(self) -> None:
         """Create a live Jira issue for a new demo key, or use the supplied existing Jira key."""
+        if not self.use_real_jira:
+            return
         client = getattr(self.orchestrator, "jira_client", None)
         if not client or not hasattr(client, "create_issue"):
             return
@@ -145,6 +191,39 @@ class DummyFlowService:
         # For real Jira, don't delete the Jira issue itself, just clear local audit state so rerun is clean
         self.approval_service.reset_issue(self.issue_key)
         await self.rab_repo.delete_record(self.issue_key)
+
+    @staticmethod
+    async def cleanup_demo_issues(project: str | None = None, max_delete: int = 50) -> dict:
+        """Delete live-demo Jira tickets created by the Demo Lab (label `live-demo`).
+
+        Demo runs create one Jira issue per run and never clean up; call this
+        from Tools to bound live-project spam. Returns {"deleted": [...], "failed": [...]}.
+        """
+        from app.config import get_settings
+
+        settings = get_settings()
+        project = project or settings.JIRA_PROJECT_KEY or "TEST"
+        client = JiraClient()
+        if not client.base_url or not client.email or not client.api_token:
+            raise RuntimeError("Jira credentials are not configured")
+        data = await client.search_issues(
+            f'project = "{project}" AND labels = live-demo ORDER BY updated DESC',
+            max_results=min(max_delete, 50),
+        )
+        deleted: list[str] = []
+        failed: list[str] = []
+        for it in data.get("issues", [])[:max_delete]:
+            key = it.get("key")
+            if not key:
+                continue
+            try:
+                await client.delete_issue(key)
+                deleted.append(key)
+            except Exception as e:
+                logger.warning("Demo cleanup failed for %s: %s", key, e)
+                failed.append(f"{key}: {e}")
+        logger.info("Demo cleanup project=%s deleted=%d failed=%d", project, len(deleted), len(failed))
+        return {"deleted": deleted, "failed": failed}
 
     async def run_full_approval(self, needs_meeting: bool = False) -> DummyFlowResult:
         """Validation → SDL approve → SDM approve → meeting decision."""
@@ -228,33 +307,27 @@ class DummyFlowService:
         await self._ensure_real_issue()
         await self._reset_issue()
 
-        import os
-        prev = os.environ.get("RAB_STRICT_VALIDATION")
-        os.environ["RAB_STRICT_VALIDATION"] = "true"
-        try:
-            class FailingValidator:
-                def validate(self, issue_data: dict):
-                    return type("V", (), {
-                        "valid": False,
-                        "detail": "Missing required fields: RAB Approver, PR Link, QA",
-                        "missing_fields": ["RAB Approver", "PR Link", "QA"],
-                    })()
-                def extract_field_value(self, *a, **kw): return None
+        class FailingValidator:
+            def validate(self, issue_data: dict):
+                return type("V", (), {
+                    "valid": False,
+                    "detail": "Missing required fields: RAB Approver, PR Link, QA",
+                    "missing_fields": ["RAB Approver", "PR Link", "QA"],
+                })()
+            def extract_field_value(self, *a, **kw): return None
 
-            orch = RabOrchestrator(
-                jira_client=self.jira_client,
-                approval_service=self.approval_service,
-                rab_repo=self.rab_repo,
-                field_validator=FailingValidator(),
-            )
-            result = await orch.handle_jira_event(self.issue_key, "jira:issue_created")
-            self._log("validation", result)
-            return DummyFlowResult(issue_key=self.issue_key, steps=self.steps, status="validation_failed")
-        finally:
-            if prev is None:
-                os.environ.pop("RAB_STRICT_VALIDATION", None)
-            else:
-                os.environ["RAB_STRICT_VALIDATION"] = prev
+        # Per-instance strict override — no os.environ mutation, so concurrent
+        # requests are unaffected (previous implementation leaked strict mode globally).
+        orch = RabOrchestrator(
+            jira_client=self.jira_client,
+            approval_service=self.approval_service,
+            rab_repo=self.rab_repo,
+            field_validator=FailingValidator(),
+            strict_validation=True,
+        )
+        result = await orch.handle_jira_event(self.issue_key, "jira:issue_created")
+        self._log("validation", result)
+        return DummyFlowResult(issue_key=self.issue_key, steps=self.steps, status="validation_failed")
 
     async def run_validated_with_notes(self) -> DummyFlowResult:
         """Advisory validated_with_notes — GET and NOTE missing fields per drawio, workflow continues."""

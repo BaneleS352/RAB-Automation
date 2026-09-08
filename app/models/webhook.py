@@ -5,7 +5,7 @@ import re
 from pydantic import BaseModel, Field, field_validator
 
 
-ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
+ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*-\d+$")
 
 
 class JiraIssuePayload(BaseModel):
@@ -18,8 +18,12 @@ class JiraIssuePayload(BaseModel):
     @field_validator("key")
     @classmethod
     def validate_issue_key(cls, v: str | None) -> str | None:
-        if v is not None and not ISSUE_KEY_PATTERN.match(v):
-            raise ValueError("Invalid issue key format")
+        if v is not None:
+            if not ISSUE_KEY_PATTERN.match(v):
+                raise ValueError("Invalid issue key format")
+            # Jira issue numbers start at 1 — ABC-0 can never exist
+            if int(v.rsplit("-", 1)[1]) < 1:
+                raise ValueError("Invalid issue key format")
         return v
 
 

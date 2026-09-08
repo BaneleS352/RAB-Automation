@@ -15,7 +15,7 @@ _ACCESS_COOKIE = "rab_access_token"
 
 
 class AccessTokenMiddleware(BaseHTTPMiddleware):
-    """Require ``ACCESS_TOKEN`` on every route except ``/static`` when configured.
+    """Require ``ACCESS_TOKEN`` on every route except ``/static`` and ``GET /health`` when configured.
 
     The token may be supplied via ``Authorization: Bearer <token>``,
     ``X-API-Key: <token>``, the ``?access_token=<token>`` query string (used by
@@ -34,6 +34,11 @@ class AccessTokenMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if request.url.path == "/static" or request.url.path.startswith("/static/"):
+            return await call_next(request)
+
+        # Health probes (K8s/load-balancer) must not require a token — otherwise
+        # the service looks down precisely when it is up but the probe lacks creds.
+        if request.method == "GET" and request.url.path == "/health":
             return await call_next(request)
 
         if hmac.compare_digest(self._token_from(request), token):

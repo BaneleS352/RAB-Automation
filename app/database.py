@@ -20,6 +20,8 @@ def _get_db_path() -> Path:
     return _DEFAULT_DB_PATH
 
 
+# Kept for backward compatibility (tests, scripts). Prefer _get_db_path() — this
+# snapshot goes stale if DATABASE_PATH changes after import; get_db() re-resolves.
 DB_PATH = _get_db_path()
 
 _connection: aiosqlite.Connection | None = None
@@ -58,7 +60,7 @@ async def get_db() -> aiosqlite.Connection:
 
 
 async def close_db() -> None:
-    global _connection
+    global _connection, _db_path_cached
     async with _db_lock:
         if _connection:
             try:
@@ -66,6 +68,7 @@ async def close_db() -> None:
             except Exception:
                 pass
             _connection = None
+            _db_path_cached = None
             logger.info("Database connection closed.")
 
 

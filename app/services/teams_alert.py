@@ -32,10 +32,20 @@ def _build_release_card(issue_key: str, summary: str, details: dict[str, Any]) -
     OpenUrl links to Jira and the local dashboard, not approval gating.
     """
     settings = get_settings()
-    base_url = (settings.JIRA_BASE_URL or "https://yourcompany.atlassian.net").rstrip("/")
-    jira_link = f"{base_url}/browse/{issue_key}"
-    # Dashboard link uses the configured webhook URL's host if available
-    dashboard_link = settings.JIRA_WEBHOOK_URL.replace("/webhooks/jira", f"/dashboard/records/{issue_key}") if settings.JIRA_WEBHOOK_URL else f"/dashboard/records/{issue_key}"
+    actions: list[dict[str, str]] = []
+    if settings.JIRA_BASE_URL:
+        jira_link = f"{settings.JIRA_BASE_URL.rstrip('/')}/browse/{issue_key}"
+        facts_seed = [{"title": "Jira link", "value": jira_link}]
+        actions.append({"type": "Action.OpenUrl", "title": "View in Jira", "url": jira_link})
+    else:
+        # No Jira base URL configured — omit the link rather than sending a placeholder host
+        facts_seed = []
+    # Dashboard link: only build an absolute URL when the webhook URL has the
+    # expected path; otherwise omit (a relative path is useless inside Teams).
+    dashboard_link: str | None = None
+    if settings.JIRA_WEBHOOK_URL and "/webhooks/jira" in settings.JIRA_WEBHOOK_URL:
+        dashboard_link = settings.JIRA_WEBHOOK_URL.replace("/webhooks/jira", f"/dashboard/records/{issue_key}")
+        actions.append({"type": "Action.OpenUrl", "title": "Open RAB dashboard", "url": dashboard_link})
 
     # Facts for the card — keep to the notable RAB fields that were previously blank/noted
     facts = [
@@ -62,7 +72,7 @@ def _build_release_card(issue_key: str, summary: str, details: dict[str, Any]) -
         facts.append({"title": "RAB audit", "value": validation[:180]})
 
     # Include Jira link explicitly as a fact as well for non-action clients
-    facts.append({"title": "Jira link", "value": jira_link})
+    facts.extend(facts_seed)
 
     return {
         "type": "AdaptiveCard",
@@ -94,10 +104,7 @@ def _build_release_card(issue_key: str, summary: str, details: dict[str, Any]) -
                 "spacing": "Medium",
             },
         ],
-        "actions": [
-            {"type": "Action.OpenUrl", "title": "View in Jira", "url": jira_link},
-            {"type": "Action.OpenUrl", "title": "Open RAB dashboard", "url": dashboard_link},
-        ],
+        "actions": actions,
     }
 
 
@@ -115,15 +122,35 @@ async def send_release_ready_alert(issue_key: str, summary: str = "", details: d
         return False
 
     card = _build_release_card(issue_key, summary, details or {})
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            resp = await client.post(webhook_url, json=card, headers={"Content-Type": "application/json"})
-            # Power Automate workflows often return 202 Accepted with empty body
-            logger.info("Teams release alert for %s — HTTP %s", issue_key, resp.status_code)
-            if resp.status_code >= 400:
-                logger.warning("Teams alert for %s failed: HTTP %s body=%s", issue_key, resp.status_code, resp.text[:300])
-                return False
-            return True
-    except Exception as e:  # httpx.RequestError etc.
-        logger.warning("Teams release alert for %s failed: %s", issue_key, e)
-        return False
+    import asyncio as _asyncio
+
+    # Bounded retry on rate-limit/transient failures, mirroring JiraClient backoff.
+    # Never raises — failures are logged so the RAB state transition still commits.
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                resp = await client.post(webhook_url, json=card, headers={"Content-Type": "application/json"})
+                # Power Automate workflows often return 202 Accepted with empty body
+                logger.info("Teams release alert for %s — HTTP %s", issue_key, resp.status_code)
+                if resp.status_code == 429 or 500 <= resp.status_code < 600:
+                    if attempt < 2:
+                        retry_after = resp.headers.get("Retry-After")
+                        try:
+                            delay = float(retry_after) if retry_after else 0.5 * (2 ** attempt)
+                        except (TypeError, ValueError):
+                            delay = 0.5 * (2 ** attempt)
+                        await _asyncio.sleep(min(delay, 5.0))
+                        continue
+                    logger.warning("Teams alert for %s failed after retries: HTTP %s body=%s", issue_key, resp.status_code, resp.text[:300])
+                    return False
+                if resp.status_code >= 400:
+                    logger.warning("Teams alert for %s failed: HTTP %s body=%s", issue_key, resp.status_code, resp.text[:300])
+                    return False
+                return True
+        except Exception as e:  # httpx.RequestError etc.
+            if attempt < 2:
+                await _asyncio.sleep(0.5 * (2 ** attempt))
+                continue
+            logger.warning("Teams release alert for %s failed: %s", issue_key, e)
+            return False
+    return False

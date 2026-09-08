@@ -6,7 +6,11 @@ python-dotenv==1.1.1
 pytest==8.4.1
 pytest-asyncio==0.24.0
 httpx==0.28.1
-ruff==0.12.1
 aiosqlite==0.21.0
 jinja2==3.1.6
 python-multipart==0.0.20
+# Optional: only needed when AZURE_VAULT_URL is set (key_vault_client falls back to env vars without them)
+azure-identity==1.25.3
+azure-keyvault-secrets==4.11.2
+# Dev-only: linter (not needed at runtime) — see requirements-dev.txt
+# ruff==0.12.1

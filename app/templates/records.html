@@ -12,7 +12,7 @@
 
 <form method="get" action="/dashboard/records" class="filter-form">
     <input type="hidden" name="offset" value="0">
-    <input type="text" name="q" value="{{ q }}" placeholder="Search issue key…" aria-label="Search issue key">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search issues (key or summary)…" aria-label="Search issues by key or summary">
     <select name="status" aria-label="Filter by status">
         <option value="">All statuses</option>
         {% for s in statuses %}

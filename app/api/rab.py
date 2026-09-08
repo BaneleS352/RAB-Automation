@@ -1,6 +1,7 @@
 """RAB records API endpoints – query audit trail."""
 
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -15,6 +16,12 @@ _repo = RabRepository()
 
 _DEFAULT_LIMIT = 50
 _MAX_LIMIT = 200
+
+# Throttle for live-feed DB reconciliation (mark missing/seen writes). The read
+# path polls every few seconds; without this, every poll rewrites every row.
+# Format: {"project": key, "keys": frozenset, "at": monotonic_ts}
+_reconcile_cache: dict = {"project": None, "keys": frozenset(), "at": 0.0}
+_RECONCILE_TTL = 60.0
 
 
 class RabRecord(BaseModel):
@@ -164,23 +171,35 @@ async def get_summary(aging_days: int = Query(2, ge=1)) -> RabSummary:
     )
 
 
-@router.get("/live")
+@router.get("/live", responses={503: {"description": "Jira integration unavailable"}})
 async def live_jira_feed(project_key: str | None = None, limit: int = Query(20, ge=1, le=50)) -> dict:
     """Live Jira feed — directly from Jira REST, not from local DB. Powers the live dashboard."""
+    from fastapi.responses import JSONResponse
+
     jira = JiraClient()
     if not jira.base_url or not jira.email or not jira.api_token:
-        return {"live": False, "issues": [], "detail": "Jira not configured"}
+        return JSONResponse(status_code=503, content={"live": False, "issues": [], "detail": "Jira not configured"})
     # Prefer explicit project, else configured JIRA_PROJECT_KEY, else all-recent
     key = project_key or jira.settings.JIRA_PROJECT_KEY
     try:
         if key:
-            issues = await jira.list_project_issues(key, max_results=100)
-            # Live Jira is the source of truth. Reconcile only the configured
-            # project so historical local records can be labeled as removed.
-            await _repo.mark_missing_from_jira(key, {it.get("key") for it in issues if it.get("key")})
-            for it in issues:
-                if it.get("key"):
-                    await _repo.mark_jira_seen(it["key"])
+            # Live view only needs `limit` rows — cap the total instead of
+            # paginating the whole project (was: up to 1000 Jira calls for limit=20).
+            issues = await jira.list_project_issues(key, max_results=min(limit, 50), total_cap=limit)
+            # Live Jira is the source of truth. Reconcile only when the polled
+            # key set changes (or the throttle expires) — not on every poll —
+            # so a read-only view does not rewrite every row every few seconds.
+            live_keys = frozenset(it.get("key") for it in issues if it.get("key"))
+            now = time.monotonic()
+            if (
+                _reconcile_cache["project"] != key
+                or _reconcile_cache["keys"] != live_keys
+                or now - _reconcile_cache["at"] >= _RECONCILE_TTL
+            ):
+                await _repo.mark_missing_from_jira(key, set(live_keys))
+                for issue_key in live_keys:
+                    await _repo.mark_jira_seen(issue_key)
+                _reconcile_cache.update({"project": key, "keys": live_keys, "at": now})
         else:
             data = await jira.search_issues("ORDER BY updated DESC", max_results=limit)
             issues = data.get("issues", [])
@@ -199,6 +218,6 @@ async def live_jira_feed(project_key: str | None = None, limit: int = Query(20, 
         return {"live": True, "project": key or "all", "issues": live_issues, "count": len(live_issues)}
     except Exception as e:
         logger.warning("Live Jira feed failed: %s", e)
-        return {"live": False, "issues": [], "detail": str(e)[:200]}
+        return JSONResponse(status_code=503, content={"live": False, "issues": [], "detail": str(e)[:200]})
 
 

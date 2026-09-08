@@ -27,8 +27,13 @@ class TestAccessTokenEnforced:
         monkeypatch.setenv("ACCESS_TOKEN", "secret-token")
 
     def test_missing_token_rejected(self, client: TestClient) -> None:
-        response = client.get("/health")
+        # GET /health is exempt (load-balancer probes); protected routes still 401
+        response = client.get("/rab/records")
         assert response.status_code == 401
+
+    def test_health_exempt_from_auth(self, client: TestClient) -> None:
+        response = client.get("/health")
+        assert response.status_code == 200
 
     def test_bearer_token_accepted(self, client: TestClient) -> None:
         response = client.get("/health", headers={"Authorization": "Bearer secret-token"})
@@ -39,7 +44,7 @@ class TestAccessTokenEnforced:
         assert response.status_code == 200
 
     def test_wrong_token_rejected(self, client: TestClient) -> None:
-        response = client.get("/health", headers={"Authorization": "Bearer wrong"})
+        response = client.get("/rab/records", headers={"Authorization": "Bearer wrong"})
         assert response.status_code == 401
 
     def test_query_param_accepted_and_sets_cookie(self, client: TestClient) -> None:

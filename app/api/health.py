@@ -15,23 +15,30 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-jira_client = JiraClient()
+# NOTE: JiraClient is constructed per health check (not at import) so credential
+# changes take effect without a restart. A module-level singleton would freeze
+# base_url/email/token from the first get_settings() call.
 
 _HEALTH_CACHE_TTL = 30.0
 _health_cache: dict = {"at": 0.0, "services": None}
 _health_lock = asyncio.Lock()
 
 
-async def _teams_status() -> dict:
-    """Teams workflow webhook status — alerting basis only, not approval gating."""
+def _teams_status() -> dict:
+    """Teams workflow webhook status — alerting basis only, not approval gating.
+
+    NOTE: `connected` here means "configured" — the workflow URL is never probed
+    (a probe POST would fire a real Teams alert). A configured URL can still fail
+    at send time (deleted flow, rotated sig); send failures are logged per alert.
+    """
     settings = get_settings()
-    url = settings.TEAMS_WORKFLOW_WEBHOOK_URL or settings.TEAMS_WEBHOOK_URL
+    url = settings.effective_teams_webhook_url
     if not url:
         return {"connected": False, "details": "Teams workflow webhook not configured — release_ready alerts skipped (set TEAMS_WORKFLOW_WEBHOOK_URL, see scripts/send_to_teams.py)"}
     # Basic URL validation (Power Automate URLs are long https://prod-*.logic.azure.com/...)
     if not url.startswith("https://"):
         return {"connected": False, "details": f"Teams webhook URL looks invalid (must start with https://): {url[:40]}..."}
-    return {"connected": True, "details": f"Teams workflow webhook configured — release_ready alerts enabled (alerting basis) | URL: {url[:50]}..."}
+    return {"connected": True, "details": "Teams workflow webhook configured (not probed — a probe would fire a real alert) — release_ready alerts enabled (alerting basis)"}
 
 
 async def _check_services() -> dict:
@@ -45,8 +52,8 @@ async def _check_services() -> dict:
         now = time.monotonic()
         if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
             return _health_cache["services"]
-        jira_status = await jira_client.check_connection()
-        teams_status = await _teams_status()
+        jira_status = await JiraClient().check_connection()
+        teams_status = _teams_status()
         warnings = _config_warnings()
         details = jira_status["details"]
         if warnings:

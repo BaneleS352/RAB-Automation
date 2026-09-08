@@ -52,14 +52,28 @@ def _get_event_lock(event_id: str) -> asyncio.Lock:
         return lock
 
 
-def _stable_payload_hash(payload: JiraWebhookPayload) -> str:
-    """Hash only stable fields for idempotency — not transient timestamps."""
+def _stable_payload_hash(payload: JiraWebhookPayload) -> str | None:
+    """Hash only stable fields for idempotency — not transient timestamps.
+
+    Returns None when the payload carries no changelog: with only
+    (issue key, event type) to hash on, distinct updates would collide and the
+    second update would be wrongly treated as a duplicate replay. Callers must
+    fall back to a fresh UUID (explicitly non-idempotent) in that case.
+    """
     changelog = payload.model_extra.get("changelog") or {}
-    items = []
+    items: list[tuple[str, str, str]] = []
     if isinstance(changelog.get("items"), list):
         for it in changelog["items"]:
             if isinstance(it, dict):
-                items.append((it.get("field"), it.get("fromString") or it.get("from"), it.get("toString") or it.get("to")))
+                items.append((
+                    str(it.get("field") or ""),
+                    str(it.get("fromString") or it.get("from") or ""),
+                    str(it.get("toString") or it.get("to") or ""),
+                ))
+    if not items:
+        return None
+    # All tuple elements are str, so sorting is total and cannot raise TypeError
+    # (previously tuples could mix None and str, crashing the sort).
     stable = {
         "key": payload.issue.key if payload.issue else None,
         "event": payload.webhookEvent,
@@ -134,9 +148,20 @@ async def jira_webhook(
     else:
         try:
             digest = _stable_payload_hash(payload)
-            event_id = f"auto:{digest}"
         except Exception:
+            digest = None
+        if digest is None:
+            # No changelog to fingerprint on — a deterministic hash would collide
+            # across distinct updates, so use a fresh UUID and process normally.
             event_id = str(uuid.uuid4())
+        else:
+            event_id = f"auto:{digest}"
+
+    # Refresh the client's credentials per request — module-level singletons would
+    # otherwise freeze base_url/email/token from the first get_settings() call.
+    # ApprovalService in-memory state intentionally stays shared (dedup source).
+    from app.services.jira_client import JiraClient
+    orchestrator.jira_client = JiraClient()
 
     lock = _get_event_lock(event_id)
     async with lock:

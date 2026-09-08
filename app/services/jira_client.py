@@ -15,12 +15,15 @@ _RETRY_BACKOFF = 0.25
 
 logger = logging.getLogger(__name__)
 
-_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-\d+$")
-_PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+$")
+_ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]*-\d+$")
+_PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]*$")
 
 
 def _validate_issue_key(key: str) -> None:
     if not _ISSUE_KEY_RE.match(key):
+        raise JiraClientError(f"Invalid issue key: {key}")
+    # Single-letter projects (A-1) are valid in Jira; issue numbers start at 1
+    if int(key.rsplit("-", 1)[1]) < 1:
         raise JiraClientError(f"Invalid issue key: {key}")
 
 
@@ -136,6 +139,18 @@ class JiraClient:
         _validate_issue_key(issue_key)
         return await self._put(f"/rest/api/3/issue/{issue_key}", {"fields": fields})
 
+    async def delete_issue(self, issue_key: str) -> dict:
+        """Delete a Jira issue (used by Demo Lab cleanup for live-demo tickets).
+
+        Routed through _request so deletes get the same bounded retry/backoff
+        as all other Jira calls (previously single-shot with no retry).
+        """
+        _validate_issue_key(issue_key)
+        if not self.base_url or not self.email or not self.api_token:
+            raise JiraClientError("Jira configuration is incomplete.")
+        url = f"{self.base_url.rstrip('/')}/rest/api/3/issue/{issue_key}"
+        return await self._request("DELETE", url)
+
     async def transition_issue(self, issue_key: str, transition_id: str) -> dict:
         _validate_issue_key(issue_key)
         return await self._post(f"/rest/api/3/issue/{issue_key}/transitions", {
@@ -175,8 +190,12 @@ class JiraClient:
                 logger.warning("Falling back to GET /search but nextPageToken is opaque (%s) — pagination may be incomplete", next_page_token)
             return await self._get("/rest/api/3/search", params=fallback_params)
 
-    async def list_project_issues(self, project_key: str, max_results: int = 100) -> list[dict]:
-        """Fetch all issues for a project, handling pagination (enhanced + legacy)."""
+    async def list_project_issues(self, project_key: str, max_results: int = 100, total_cap: int = 1000) -> list[dict]:
+        """Fetch all issues for a project, handling pagination (enhanced + legacy).
+
+        `max_results` is the per-page size; `total_cap` bounds the total fetched
+        (live views should pass a small cap instead of paginating the whole project).
+        """
         _validate_project_key(project_key)
         all_issues: list[dict] = []
         next_token: str | None = None
@@ -184,8 +203,10 @@ class JiraClient:
             data = await self.search_issues(f'project = "{project_key}" ORDER BY updated DESC', max_results=max_results, next_page_token=next_token)
             issues = data.get("issues", [])
             all_issues.extend(issues)
-            if len(all_issues) >= 1000:  # safety cap
-                logger.warning("list_project_issues hit safety cap 1000 for project %s — truncated", project_key)
+            if len(all_issues) >= total_cap:  # safety cap
+                if total_cap >= 1000:
+                    logger.warning("list_project_issues hit safety cap 1000 for project %s — truncated", project_key)
+                all_issues = all_issues[:total_cap]
                 break
             # Enhanced search uses nextPageToken
             next_token = data.get("nextPageToken")

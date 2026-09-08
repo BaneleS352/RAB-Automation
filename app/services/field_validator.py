@@ -32,8 +32,6 @@ REQUIRED_FIELDS = [
 
 
 STANDARD_FIELDS: set[str] = {"assignee", "reporter"}
-# Backward compat alias — was previously an identity dict
-STANDARD_FIELD_KEYS = {k: k for k in STANDARD_FIELDS}
 
 
 class FieldValidator:

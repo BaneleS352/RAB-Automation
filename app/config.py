@@ -14,7 +14,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.services.key_vault_client import KeyVaultClient, KeyVaultClientError
 
 # Secret-bearing settings that may be resolved from Azure Key Vault.
-_SECRET_FIELDS = ("JIRA_API_TOKEN", "ACCESS_TOKEN")
+# TEAMS_WORKFLOW_WEBHOOK_URL carries a signed workflow URL — treat it as a secret too.
+_SECRET_FIELDS = ("JIRA_API_TOKEN", "ACCESS_TOKEN", "TEAMS_WORKFLOW_WEBHOOK_URL")
 
 
 class Settings(BaseSettings):

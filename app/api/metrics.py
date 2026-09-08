@@ -37,7 +37,14 @@ def get_metrics_data() -> dict:
 
 
 class MetricsMiddleware:
-    """ASGI middleware to track request metrics."""
+    """ASGI middleware to track request metrics.
+
+    NOTE: counters are per-process (no shared memory). With
+    ``uvicorn --workers>1`` each worker reports only its own counts, so
+    ``/metrics`` must be scraped per worker or aggregated externally. Counter
+    increments are safe on a single event loop (no ``await`` between read and
+    write); no lock is needed there.
+    """
 
     def __init__(self, app):
         self.app = app

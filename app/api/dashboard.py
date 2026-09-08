@@ -25,7 +25,8 @@ _templates_dir = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_templates_dir))
 
 _repo = RabRepository()
-_jira = JiraClient()
+# NOTE: JiraClient is constructed per request (not at import) so credential
+# changes take effect without a restart. Do not add a module-level singleton here.
 
 _RECORDS_PAGE_SIZE = 25
 _WEBHOOK_PAGE_SIZE = 50
@@ -45,6 +46,49 @@ def _require_feature(request: Request, feature: str) -> None:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
+def _require_real_jira(use_real_jira: bool) -> bool:
+    """Unify the real-Jira gate for Demo Lab and Tools.
+
+    Returns the effective flag. Raises 503 when real Jira is requested but
+    credentials are missing, so both entry points behave identically (previously
+    Demo returned 503 while Tools raised an unhandled 500).
+    """
+    from app.config import get_settings
+    s = get_settings()
+    real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
+    if use_real_jira and not real_available:
+        raise HTTPException(status_code=503, detail="Real Jira requested but Jira credentials are not configured")
+    return bool(use_real_jira and real_available)
+
+
+# Scenario name → DummyFlowService method. Single dispatch table shared by the
+# Tools and Demo handlers so new scenarios are added in one place (previously
+# two parallel if/elif chains that already drifted once).
+_SCENARIO_METHODS = {
+    "pending_sdl": "run_pending_sdl",
+    "pending_sdm": "run_pending_sdm",
+    "validation_failed": "run_validation_failed",
+    "validated_with_notes": "run_validated_with_notes",
+    "rejected_sdl": "run_rejection",
+    "rejected_sdm": "run_sdm_rejection",
+    "aging": "run_aging_pending",
+}
+
+
+async def _run_demo_scenario(svc, scenario: str, *, needs_meeting: bool = False, reject: bool = False):
+    """Run one named demo scenario (or the default full flow) on a DummyFlowService."""
+    if scenario == "full" or not scenario:
+        return await svc.run_full_approval(needs_meeting=needs_meeting)
+    method_name = _SCENARIO_METHODS.get(scenario)
+    if method_name is None:
+        # Unknown scenario values fall back to legacy behavior, never 500.
+        return await svc.run_rejection() if reject else await svc.run_full_approval(needs_meeting=needs_meeting)
+    method = getattr(svc, method_name)
+    if scenario == "aging":
+        return await method(days=3)
+    return await method()
+
+
 async def _check_connection_status() -> dict:
     """Connection status for Jira + Teams, cached to avoid hammering
     the external API on every page load / 30s auto-refresh."""
@@ -57,10 +101,9 @@ async def _check_connection_status() -> dict:
         now = time.monotonic()
         if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
             return _health_cache["services"]
-        jira_status = await _jira.check_connection()
+        jira_status = await JiraClient().check_connection()
         # Teams is alerting-only; check if workflow webhook is configured
         from app.config import get_settings
-        from app.services.config_warnings import get_config_warnings as _cw
         settings = get_settings()
         teams_url = settings.TEAMS_WORKFLOW_WEBHOOK_URL or settings.TEAMS_WEBHOOK_URL
         if teams_url:
@@ -68,7 +111,7 @@ async def _check_connection_status() -> dict:
         else:
             teams_status = {"connected": False, "details": "Teams workflow webhook not configured — release_ready alerts skipped (set TEAMS_WORKFLOW_WEBHOOK_URL)"}
         details = jira_status.get("details", "Unknown")
-        warnings = _cw()
+        warnings = _config_warnings()
         if warnings:
             details += " | Config warnings: " + "; ".join(warnings)
 
@@ -146,8 +189,11 @@ async def dashboard_records(
 async def dashboard_record_detail(request: Request, issue_key: str) -> HTMLResponse:
     record = await _repo.get_record(issue_key)
     if not record:
+        # Match the JSON API contract (GET /rab/records/{key} → 404) so
+        # crawlers and monitors can distinguish missing issues.
         return templates.TemplateResponse(
             request, "record_detail.html", {"record": None, "events": [], "issue_key": issue_key},
+            status_code=404,
         )
     events = await _repo.get_approval_events(issue_key)
     field_changes = await _repo.get_field_changes(issue_key)
@@ -191,8 +237,17 @@ async def dashboard_tools_run(
     data = get_metrics_data()
     events = await _repo.get_webhook_events(limit=20)
     result = None
-    if action in ("pending_sdl", "pending_sdm", "validation_failed", "aging"):
-        svc = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=use_real_jira)
+    cleanup_result = None
+    if action == "cleanup_demo":
+        # Cleanup always targets live Jira by definition — require credentials.
+        _require_real_jira(True)
+        cleanup_result = await DummyFlowService.cleanup_demo_issues()
+        events = await _repo.get_webhook_events(limit=20)
+    elif action in ("pending_sdl", "pending_sdm", "validation_failed", "aging"):
+        try:
+            svc = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=_require_real_jira(use_real_jira))
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         if action == "pending_sdl":
             result = await svc.run_pending_sdl()
         elif action == "pending_sdm":
@@ -202,24 +257,12 @@ async def dashboard_tools_run(
         elif action == "aging":
             result = await svc.run_aging_pending(days=3)
     elif action == "custom":
-        svc = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=use_real_jira)
-        if scenario == "pending_sdl":
-            result = await svc.run_pending_sdl()
-        elif scenario == "pending_sdm":
-            result = await svc.run_pending_sdm()
-        elif scenario == "validation_failed":
-            result = await svc.run_validation_failed()
-        elif scenario == "validated_with_notes":
-            result = await svc.run_validated_with_notes()
-        elif scenario == "rejected_sdl":
-            result = await svc.run_rejection()
-        elif scenario == "rejected_sdm":
-            result = await svc.run_sdm_rejection()
-        elif scenario == "aging":
-            result = await svc.run_aging_pending(days=3)
-        else:
-            result = await svc.run_full_approval(needs_meeting=needs_meeting)
-    return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": result})
+        try:
+            svc = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=_require_real_jira(use_real_jira))
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        result = await _run_demo_scenario(svc, scenario, needs_meeting=needs_meeting)
+    return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": result, "cleanup_result": cleanup_result})
 
 
 @router.get("/demo", response_class=HTMLResponse)
@@ -268,29 +311,13 @@ async def dashboard_demo_run(
     from app.config import get_settings
     s = get_settings()
     real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
+    eff_real = _require_real_jira(use_real_jira)
     try:
-        service = DummyFlowService(issue_key=issue_key, summary=summary)
+        service = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=eff_real)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     # Scenario takes precedence over legacy reject/needs_meeting flags
-    if scenario == "pending_sdl":
-        result = await service.run_pending_sdl()
-    elif scenario == "pending_sdm":
-        result = await service.run_pending_sdm()
-    elif scenario == "validation_failed":
-        result = await service.run_validation_failed()
-    elif scenario == "validated_with_notes":
-        result = await service.run_validated_with_notes()
-    elif scenario == "rejected_sdl":
-        result = await service.run_rejection()
-    elif scenario == "rejected_sdm":
-        result = await service.run_sdm_rejection()
-    elif scenario == "aging":
-        result = await service.run_aging_pending(days=3)
-    elif scenario == "full":
-        result = await service.run_full_approval(needs_meeting=needs_meeting)
-    else:
-        result = await service.run_rejection() if reject else await service.run_full_approval(needs_meeting=needs_meeting)
+    result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
     return templates.TemplateResponse(
         request,
         "demo.html",

@@ -88,8 +88,9 @@
                 <input type="checkbox" name="needs_meeting" value="true" {% if needs_meeting %}checked{% endif %}>
                 <span>Meeting needed</span>
             </label>
-            <label class="field checkbox-field" title="Create real Jira issue via Jira API (requires Jira config)">
-                <span>Live Jira ticket will be created</span>
+            <label class="field checkbox-field" title="Create a real Jira ticket via the Jira API (requires Jira config); unchecked runs offline with a stub ticket">
+                <input type="checkbox" name="use_real_jira" value="true" {% if use_real_jira %}checked{% endif %}>
+                <span>Use real Jira ticket</span>
             </label>
             <!-- legacy reject checkbox kept hidden for backward compat but scenario is preferred -->
             <input type="hidden" name="reject" value="{% if reject %}true{% endif %}">
@@ -97,12 +98,12 @@
         </form>
         <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
             <span class="muted" style="font-size:0.8rem;">Quick:</span>
-            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDL"><input type="hidden" name="scenario" value="pending_sdl"><button class="btn btn-outline btn-sm">Pending SDL</button></form>
-            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDM"><input type="hidden" name="scenario" value="pending_sdm"><button class="btn btn-outline btn-sm">Pending SDM</button></form>
-            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-FAIL"><input type="hidden" name="scenario" value="validation_failed"><button class="btn btn-outline btn-sm">Validation failed</button></form>
-            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-AGING"><input type="hidden" name="scenario" value="aging"><button class="btn btn-outline btn-sm">Aging</button></form>
+            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDL"><input type="hidden" name="scenario" value="pending_sdl"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Pending SDL</button></form>
+            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDM"><input type="hidden" name="scenario" value="pending_sdm"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Pending SDM</button></form>
+            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-FAIL"><input type="hidden" name="scenario" value="validation_failed"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Validation failed</button></form>
+            <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-AGING"><input type="hidden" name="scenario" value="aging"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Aging</button></form>
         </div>
-        <p class="muted" style="margin-top:0.75rem;">Every run creates or reuses a live Jira ticket, then persists the resulting audit trail locally.</p>
+        <p class="muted" style="margin-top:0.75rem;">Quick presets run offline (stub tickets). Tick “Use real Jira ticket” above for a live Jira ticket; the audit trail is persisted locally either way.</p>
     </div>
 </div>
 

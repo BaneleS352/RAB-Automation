@@ -14,9 +14,8 @@ os.environ["DATABASE_PATH"] = os.path.join(
 )
 
 from app.config import get_settings
-from app.database import DB_PATH, init_db, close_db
+from app.database import _get_db_path, init_db, close_db
 from app.api.webhooks import orchestrator
-from app.services.approval_service import ApprovalService
 
 
 logger = logging.getLogger(__name__)
@@ -67,11 +66,13 @@ async def _clear_test_records() -> None:
 
 
 def _init():
-    if DB_PATH.exists():
+    # Resolve fresh (not the frozen DB_PATH constant) so a moved DATABASE_PATH is honored
+    db_path = _get_db_path()
+    if db_path.exists():
         try:
-            DB_PATH.unlink()
+            db_path.unlink()
         except PermissionError:
-            logger.warning("Could not delete existing test DB %s (locked) — reusing it", DB_PATH)
+            logger.warning("Could not delete existing test DB %s (locked) — reusing it", db_path)
     asyncio.run(init_db())
 
 

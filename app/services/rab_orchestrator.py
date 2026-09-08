@@ -92,6 +92,7 @@ class RabOrchestrator:
         teams_client=None,
         approval_service: ApprovalService | None = None,
         rab_repo: RabRepository | None = None,
+        strict_validation: bool | None = None,
     ) -> None:
         # teams_client kept for backward compat but ignored — monitor mode, approvals in Jira
         self.jira_client = jira_client or JiraClient()
@@ -99,6 +100,15 @@ class RabOrchestrator:
         self.teams_client = teams_client
         self.approval_service = approval_service or ApprovalService()
         self.rab_repo = rab_repo or RabRepository()
+        # Explicit per-instance override for strict validation. When None, falls back to
+        # the RAB_STRICT_VALIDATION setting. Avoids mutating os.environ (which would leak
+        # to concurrent requests since get_settings() reads env on every call).
+        self.strict_validation = strict_validation
+
+    def _is_strict(self) -> bool:
+        if self.strict_validation is not None:
+            return self.strict_validation
+        return bool(getattr(get_settings(), "RAB_STRICT_VALIDATION", False))
 
     async def handle_jira_event(
         self,
@@ -117,7 +127,7 @@ class RabOrchestrator:
             rich = _extract_rich_fields_orch(issue_data, self.field_validator)
             # Advisory: always NOTE present/missing (per drawio: GET and NOTE), do not hard-fail on missing.
             # Store advisory detail even when valid but with missing_fields so dashboard shows completeness.
-            strict = bool(getattr(get_settings(), "RAB_STRICT_VALIDATION", False))
+            strict = self._is_strict()
             if strict:
                 val_result = validation.detail if not validation.valid else ""
                 status = "validated" if validation.valid else "validation_failed"
@@ -222,30 +232,40 @@ class RabOrchestrator:
                 })
             else:
                 await self.rab_repo.record_validation(issue_key, validation.valid, validation.detail)
-            # Advisory mode (default): GET ticket and NOTE which RAB fields are present/missing (per data structure.drawio.html),
-            # do NOT block workflow. Strict mode (RAB_STRICT_VALIDATION=True) retains old hard-fail.
-            strict = bool(getattr(get_settings(), "RAB_STRICT_VALIDATION", False))
-            if not validation.valid and strict:
-                msg = f"Validation failed.\n\n{validation.detail}\n\nPlease update the ticket and trigger re-check."
-                await self._add_comment(issue_key, f"RAB Automation: {msg}")
-                await self._send_card("Validation Failed")
-                await self._maybe_transition(issue_key, "JIRA_TRANSITION_REJECT")
-                return f"validation_failed: {validation.detail}"
-            # Advisory: always continue, but add a Jira comment noting completeness (fixes blank-details by surfacing it)
-            if validation.missing_fields:
-                await self._add_comment(issue_key, f"RAB Automation: {validation.detail}\n\nWorkflow continues (advisory mode — set RAB_STRICT_VALIDATION=true to block on missing fields).")
-                await self._send_card(f"RAB audit noted — {len(validation.missing_fields)} field(s) missing, proceeding")
-            else:
-                await self._maybe_transition(issue_key, "JIRA_TRANSITION_VALIDATE")
-                await self._add_comment(issue_key, "RAB Automation: Ticket validation passed — starting approvals.")
-                await self._send_card("Validation Passed")
-
+            strict = self._is_strict()
+            # Capture the post-lock notification plan; Jira/Teams calls happen
+            # AFTER the lock is released so slow integrations cannot block the issue.
             summary = issue_data.get("fields", {}).get("summary", "No summary")
-            self.approval_service.create_approval(issue_key, summary)
+            if not validation.valid and strict:
+                outcome = "strict_fail"
+            elif validation.missing_fields:
+                outcome = "advisory_notes"
+                self.approval_service.create_approval(issue_key, summary)
+                await self._record_sdl_request(issue_key)
+            else:
+                outcome = "clean"
+                self.approval_service.create_approval(issue_key, summary)
+                await self._record_sdl_request(issue_key)
 
-            await self._maybe_transition(issue_key, "JIRA_TRANSITION_REQUEST_APPROVAL")
-            await self._request_approval(issue_key, summary, ApprovalStep.SDL)
-            return "approval_requested_sdl"
+        # --- lock released: notify integrations (best-effort, non-blocking for state) ---
+        if outcome == "strict_fail":
+            msg = f"Validation failed.\n\n{validation.detail}\n\nPlease update the ticket and trigger re-check."
+            await self._add_comment(issue_key, f"RAB Automation: {msg}")
+            await self._send_card("Validation Failed")
+            await self._maybe_transition(issue_key, "JIRA_TRANSITION_REJECT")
+            return f"validation_failed: {validation.detail}"
+        if outcome == "advisory_notes":
+            await self._add_comment(issue_key, f"RAB Automation: {validation.detail}\n\nWorkflow continues (advisory mode — set RAB_STRICT_VALIDATION=true to block on missing fields).")
+            await self._send_card(f"RAB audit noted — {len(validation.missing_fields)} field(s) missing, proceeding")
+        else:
+            await self._maybe_transition(issue_key, "JIRA_TRANSITION_VALIDATE")
+            await self._add_comment(issue_key, "RAB Automation: Ticket validation passed — starting approvals.")
+            await self._send_card("Validation Passed")
+
+        await self._maybe_transition(issue_key, "JIRA_TRANSITION_REQUEST_APPROVAL")
+        await self._add_comment(issue_key, f"RAB Automation: {ApprovalStep.SDL.value} approval requested.")
+        await self._send_card(f"{ApprovalStep.SDL.value} Approval: {issue_key}")
+        return "approval_requested_sdl"
 
     async def _fetch_issue(self, issue_key: str) -> dict | None:
         try:
@@ -277,6 +297,16 @@ class RabOrchestrator:
         # Monitor mode — no Teams delivery; log for audit trail
         logger.info("Monitor event: %s", title)
 
+    async def _record_sdl_request(self, issue_key: str) -> None:
+        """Persist the SDL request (DB + in-memory approval id). No network — call notify separately after lock release."""
+        approval_id = str(uuid.uuid4())
+        self.approval_service.record_approval_id(issue_key, approval_id)
+        await self.rab_repo.upsert_record(issue_key, {
+            "sdl_approval": "requested",
+            "sdl_approval_id": approval_id,
+            "status": RabStatus.SDL_REQUESTED.value,
+        })
+
     async def _request_approval(self, issue_key: str, summary: str, step: ApprovalStep) -> None:
         approval_id = str(uuid.uuid4())
         self.approval_service.record_approval_id(issue_key, approval_id)
@@ -301,6 +331,9 @@ class RabOrchestrator:
         reason: str | None = None,
         approval_id: str = "",
     ) -> dict:
+        # State transition (in-memory + DB) happens under the per-issue lock;
+        # Jira/Teams network calls happen AFTER the lock is released so a slow
+        # integration cannot block concurrent callbacks for the same issue.
         lock = await _get_issue_lock(issue_key)
         async with lock:
             state = self.approval_service.get_approval(issue_key)
@@ -312,6 +345,10 @@ class RabOrchestrator:
 
             step = "SDL" if state.current_step == ApprovalStep.SDL else "SDM"
             recorded = state.sdl_approval_id if step == "SDL" else state.sdm_approval_id
+            # NOTE: an empty approval_id skips verification by design — approval
+            # callbacks currently have no authenticated caller (monitor mode; cards
+            # are log-only), and all Demo flows call back without an id. Enforce
+            # matching only once callbacks carry credentials (Bot/Teams).
             if approval_id and recorded and approval_id != recorded:
                 logger.warning(
                     "Rejected callback for %s: approval_id %s does not match recorded %s id %s",
@@ -327,80 +364,103 @@ class RabOrchestrator:
                 return {"status": "error", "detail": result["error"]}
 
             await self.rab_repo.record_approval_event(issue_key, step, action, approver, reason or "")
+            next_step = result.get("next_step")
 
-            if decision == "rejected":
-                rejected_by = result["rejected_by"]
-                await self._maybe_transition(issue_key, "JIRA_TRANSITION_REJECT")
-                await self._add_comment(
-                    issue_key,
-                    f"RAB Automation: {rejected_by} rejected.\nReason: {reason or 'No reason provided.'}",
-                )
-                await self._send_card(f"Rejected: {issue_key}")
-                return {"status": "rejected", "rejected_by": rejected_by, "detail": f"Rejected by {rejected_by}"}
+            sdm_requested = False
+            if decision == "approved" and next_step == ApprovalStep.SDM.value:
+                # Record the SDM request (DB + in-memory id) under the lock;
+                # notifications go out after release.
+                sdm_approval_id = str(uuid.uuid4())
+                self.approval_service.record_approval_id(issue_key, sdm_approval_id)
+                await self.rab_repo.upsert_record(issue_key, {
+                    "sdm_approval": "requested",
+                    "sdm_approval_id": sdm_approval_id,
+                    "status": RabStatus.SDM_REQUESTED.value,
+                })
+                sdm_requested = True
 
-            if decision == "approved":
-                await self._maybe_transition(issue_key, "JIRA_TRANSITION_APPROVE")
-                await self._add_comment(issue_key, f"RAB Automation: {step} approved.")
-                await self._send_card(f"Approved by {step}: {issue_key}")
+        if decision == "rejected":
+            rejected_by = result["rejected_by"]
+            await self._maybe_transition(issue_key, "JIRA_TRANSITION_REJECT")
+            await self._add_comment(
+                issue_key,
+                f"RAB Automation: {rejected_by} rejected.\nReason: {reason or 'No reason provided.'}",
+            )
+            await self._send_card(f"Rejected: {issue_key}")
+            return {"status": "rejected", "rejected_by": rejected_by, "detail": f"Rejected by {rejected_by}"}
 
-                next_step = result.get("next_step")
-                if next_step == ApprovalStep.SDM.value:
-                    await self._maybe_transition(issue_key, "JIRA_TRANSITION_REQUEST_APPROVAL")
-                    await self._request_approval(issue_key, state.summary, ApprovalStep.SDM)
-                    return {"status": "approved", "detail": "SDL approved — SDM approval requested", "next": "sdm"}
-                else:
-                    await self._add_comment(issue_key, "RAB Automation: All approvals complete. Requesting meeting decision.")
-                    await self._request_meeting_decision(issue_key)
-                    return {"status": "approved", "detail": "All approvals complete", "next": "meeting_decision"}
+        if decision == "approved":
+            await self._maybe_transition(issue_key, "JIRA_TRANSITION_APPROVE")
+            await self._add_comment(issue_key, f"RAB Automation: {step} approved.")
+            await self._send_card(f"Approved by {step}: {issue_key}")
 
-            return {"status": "error", "detail": result.get("error", "Unknown")}
+            if sdm_requested:
+                await self._maybe_transition(issue_key, "JIRA_TRANSITION_REQUEST_APPROVAL")
+                await self._add_comment(issue_key, f"RAB Automation: {ApprovalStep.SDM.value} approval requested.")
+                await self._send_card(f"{ApprovalStep.SDM.value} Approval: {issue_key}")
+                return {"status": "approved", "detail": "SDL approved — SDM approval requested", "next": "sdm"}
+            else:
+                await self._add_comment(issue_key, "RAB Automation: All approvals complete. Requesting meeting decision.")
+                await self._request_meeting_decision(issue_key)
+                return {"status": "approved", "detail": "All approvals complete", "next": "meeting_decision"}
+
+        return {"status": "error", "detail": result.get("error", "Unknown")}
 
     async def _request_meeting_decision(self, issue_key: str) -> None:
         await self._send_card(f"Meeting Decision: {issue_key}")
         await self._add_comment(issue_key, "RAB Automation: Meeting decision requested.")
 
     async def handle_meeting_callback(self, issue_key: str, needs_meeting: bool) -> str:
+        # DB state transition happens under the lock; Jira comments and the Teams
+        # alert (15s timeout) go out after release so they cannot block the issue.
         lock = await _get_issue_lock(issue_key)
         async with lock:
+            previous = await self.rab_repo.get_record(issue_key)
+            previously_ready = bool(previous) and previous.get("status") == RabStatus.RELEASE_READY.value
             await self.rab_repo.upsert_record(issue_key, {
                 "meeting_needed": 1 if needs_meeting else 0,
                 "status": RabStatus.MEETING_SCHEDULED.value if needs_meeting else RabStatus.RELEASE_READY.value,
             })
-            if needs_meeting:
-                await self._add_comment(issue_key, "RAB Automation: Meeting will be scheduled. Resolving attendees from ticket.")
-                await self._send_card("Meeting Needed")
-                return "meeting_scheduled"
-            else:
-                await self._add_comment(issue_key, "RAB Automation: No meeting needed — release ticket finalized.")
-                await self._send_card("Release Ready")
-                # Teams alerting basis only — final release state (per user request; re-uses send_to_teams.py workflow pattern)
-                try:
-                    from app.services.teams_alert import send_release_ready_alert
+            record = await self.rab_repo.get_record(issue_key)
+        if not needs_meeting and previously_ready:
+            # Retry/double-click on an already-ready ticket: state is unchanged,
+            # so skip the Teams alert to avoid duplicate release notifications.
+            logger.info("Meeting callback for %s already release_ready — skipping duplicate alert", issue_key)
+            return "release_ready"
+        if needs_meeting:
+            await self._add_comment(issue_key, "RAB Automation: Meeting will be scheduled. Resolving attendees from ticket.")
+            await self._send_card("Meeting Needed")
+            return "meeting_scheduled"
+        else:
+            await self._add_comment(issue_key, "RAB Automation: No meeting needed — release ticket finalized.")
+            await self._send_card("Release Ready")
+            # Teams alerting basis only — final release state (per user request; re-uses send_to_teams.py workflow pattern)
+            try:
+                from app.services.teams_alert import send_release_ready_alert
 
-                    record = await self.rab_repo.get_record(issue_key)
-                    summary = record.get("summary") if record else ""
-                    details = {
-                        "jira_status": record.get("jira_status") if record else "",
-                        "issuetype": record.get("issuetype") if record else "",
-                        "priority": record.get("priority") if record else "",
-                        "assignee": record.get("assignee") if record else "",
-                        "reporter": record.get("reporter") if record else "",
-                        "environment": "",
-                        "labels": record.get("labels") if record else "",
-                        "validation_result": record.get("validation_result") if record else "",
-                    }
-                    # Try to enrich environment from raw_fields if available
-                    if record and record.get("raw_fields"):
-                        try:
-                            import json as _json
+                summary = record.get("summary") if record else ""
+                details = {
+                    "jira_status": record.get("jira_status") if record else "",
+                    "issuetype": record.get("issuetype") if record else "",
+                    "priority": record.get("priority") if record else "",
+                    "assignee": record.get("assignee") if record else "",
+                    "reporter": record.get("reporter") if record else "",
+                    "environment": "",
+                    "labels": record.get("labels") if record else "",
+                    "validation_result": record.get("validation_result") if record else "",
+                }
+                # Try to enrich environment from raw_fields if available
+                if record and record.get("raw_fields"):
+                    try:
+                        import json as _json
 
-                            raw = _json.loads(record["raw_fields"])
-                            env_val = (raw.get("rab_fields") or {}).get("environment")
-                            if env_val:
-                                details["environment"] = env_val
-                        except Exception:
-                            pass
-                    await send_release_ready_alert(issue_key, summary, details)
-                except Exception as e:
-                    logger.warning("Teams release alert wiring for %s failed (non-blocking): %s", issue_key, e)
-                return "release_ready"
+                        raw = _json.loads(record["raw_fields"])
+                        env_val = (raw.get("rab_fields") or {}).get("environment")
+                        if env_val:
+                            details["environment"] = env_val
+                    except Exception:
+                        pass
+                await send_release_ready_alert(issue_key, summary, details)
+            except Exception as e:
+                logger.warning("Teams release alert wiring for %s failed (non-blocking): %s", issue_key, e)
+            return "release_ready"

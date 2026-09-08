@@ -1,5 +1,6 @@
 """Repository for RAB audit records and approval events."""
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -40,52 +41,35 @@ class RabRepository:
         # Demo records are local simulations, never Jira issues.
         if issue_key.startswith("DEMO-"):
             data = {**data, "jira_exists": 0, "jira_last_seen": ""}
-        db = await get_db()
-        now = datetime.now(timezone.utc).isoformat()
-        # Use INSERT ... ON CONFLICT to avoid race where two concurrent webhooks both see no existing and insert duplicate
-        # (previous SELECT-then-INSERT was racy; now that issue_key has UNIQUE index, duplicates would raise IntegrityError)
-        try:
-            # Try fast path: attempt UPDATE first; if row exists, update it
+        if not data:
+            # Guard against `UPDATE ... SET , updated_at` syntax error on empty diffs
+            db = await get_db()
             existing = await db.execute_fetchall(
                 "SELECT id FROM rab_records WHERE issue_key = ?", (issue_key,)
             )
             if existing:
-                sets = ", ".join(f"{k} = ?" for k in data)
-                values = list(data.values()) + [now, issue_key]
-                await db.execute(
-                    f"UPDATE rab_records SET {sets}, updated_at = ? WHERE issue_key = ?",
-                    values,
-                )
-                row_id = existing[0][0]
-                await db.commit()
-                return row_id
-            # No existing — try INSERT; handle race where another concurrent request inserted between SELECT and INSERT
-            payload = dict(data)
-            payload["issue_key"] = issue_key
-            keys = ", ".join(payload.keys())
-            placeholders = ", ".join("?" for _ in payload)
-            values = list(payload.values())
-            try:
-                cursor = await db.execute(
-                    f"INSERT INTO rab_records ({keys}, created_at, updated_at) VALUES ({placeholders}, ?, ?)",
-                    values + [now, now],
-                )
-                row_id = cursor.lastrowid
-                await db.commit()
-                return row_id
-            except IntegrityError:
-                # Race: another request inserted the same issue_key just now — fall back to UPDATE
-                await db.rollback()
-                sets = ", ".join(f"{k} = ?" for k in data)
-                values = list(data.values()) + [now, issue_key]
-                await db.execute(
-                    f"UPDATE rab_records SET {sets}, updated_at = ? WHERE issue_key = ?",
-                    values,
-                )
-                await db.commit()
-                # Fetch the id that won the race
-                row = await db.execute_fetchall("SELECT id FROM rab_records WHERE issue_key = ?", (issue_key,))
-                return row[0][0] if row else 0
+                return existing[0][0]
+            raise ValueError("upsert_record requires at least one column to write")
+        db = await get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        # Single-statement atomic upsert (requires the UNIQUE index on issue_key).
+        # created_at is insert-only so the original creation timestamp is preserved.
+        payload = dict(data)
+        payload["issue_key"] = issue_key
+        cols = list(payload.keys()) + ["created_at", "updated_at"]
+        values = list(payload.values()) + [now, now]
+        updates = [f"{k} = excluded.{k}" for k in payload if k != "issue_key"]
+        updates.append("updated_at = excluded.updated_at")
+        sets = ", ".join(updates)
+        try:
+            cursor = await db.execute(
+                f"INSERT INTO rab_records ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)}) "
+                f"ON CONFLICT(issue_key) DO UPDATE SET {sets} RETURNING id",
+                values,
+            )
+            row = await cursor.fetchone()
+            await db.commit()
+            return row[0] if row else 0
         except Exception:
             await db.rollback()
             raise
@@ -142,11 +126,26 @@ class RabRepository:
             return False
         except Exception as e:
             await db.rollback()
-            # Under WAL + concurrent retries, SQLite can raise "database is locked"
-            # instead of IntegrityError for a duplicate insert. Treat as duplicate.
+            # SQLITE_BUSY ("database is locked") is transient contention, NOT a
+            # duplicate — treating it as a duplicate would silently drop legitimate
+            # webhooks. Retry with backoff, then let it raise.
             if "database is locked" in str(e).lower():
-                logger.warning("Database locked on webhook %s — treating as duplicate: %s", event_id, e)
-                return False
+                logger.warning("Database locked on webhook %s — retrying: %s", event_id, e)
+                await asyncio.sleep(0.05)
+                try:
+                    await db.execute(
+                        "INSERT INTO webhook_events (event_id, issue_key, event_type) VALUES (?, ?, ?)",
+                        (event_id, issue_key, event_type),
+                    )
+                    await db.commit()
+                    return True
+                except IntegrityError:
+                    await db.rollback()
+                    return False
+                except Exception as retry_e:
+                    await db.rollback()
+                    logger.exception("Unexpected error recording webhook event: %s", retry_e)
+                    raise
             logger.exception("Unexpected error recording webhook event: %s", e)
             raise
 
@@ -161,9 +160,11 @@ class RabRepository:
     async def mark_missing_from_jira(self, project_key: str, issue_keys: set[str]) -> int:
         """Mark locally tracked issues absent from the live Jira project view as removed."""
         db = await get_db()
+        # Escape LIKE wildcards so project keys containing %/_ cannot match unrelated issues
+        escaped = project_key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         rows = await db.execute_fetchall(
-            "SELECT issue_key FROM rab_records WHERE issue_key LIKE ?",
-            (f"{project_key}-%",),
+            "SELECT issue_key FROM rab_records WHERE issue_key LIKE ? ESCAPE '\\'",
+            (f"{escaped}-%",),
         )
         missing = [r[0] for r in rows if r[0] not in issue_keys]
         if missing:
@@ -210,12 +211,14 @@ class RabRepository:
             clauses.append("status = ?")
             params.append(status)
         if q:
-            # Escape LIKE wildcards and limit length to prevent DoS/enumeration
+            # Escape LIKE wildcards and limit length to prevent DoS/enumeration.
+            # Search matches issue key OR summary (previously key-only, so title
+            # searches silently returned nothing).
             if len(q) > 100:
                 q = q[:100]
             escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            clauses.append("issue_key LIKE ? ESCAPE '\\'")
-            params.append(f"%{escaped}%")
+            clauses.append("(issue_key LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')")
+            params.extend([f"%{escaped}%", f"%{escaped}%"])
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         count_row = await db.execute_fetchall(f"SELECT COUNT(*) FROM rab_records {where}", params)
         total = count_row[0][0] if count_row else 0

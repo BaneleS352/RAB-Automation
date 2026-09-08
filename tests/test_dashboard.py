@@ -110,7 +110,7 @@ class TestDashboardOverview:
 class TestDashboardRecordsFiltering:
     def test_shows_filter_form(self, client: TestClient) -> None:
         body = client.get("/dashboard/records").text
-        assert "Search issue key" in body
+        assert "Search issues (key or summary)" in body
         assert "All statuses" in body
 
     def test_filters_by_status(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
