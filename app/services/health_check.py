@@ -71,11 +71,12 @@ def _teams_status(settings=None) -> dict:
             "inbound_details": inbound["details"],
         }
     # Basic URL validation (Power Automate URLs are long https://prod-*.logic.azure.com/...)
+    # NOTE: never echo the URL itself — it is a signed secret (see _SECRET_FIELDS).
     if not url.startswith("https://"):
         return {
             "connected": False,
             "configured": True,
-            "details": f"Teams webhook URL looks invalid (must start with https://): {url[:40]}...",
+            "details": "Teams webhook URL is invalid (must start with https://) — alerts will fail at send time.",
             "direction": "outbound-only",
             "outbound_details": "Outbound URL present but invalid (must start with https://) — alerts will fail at send time.",
             "inbound_supported": inbound["supported"],

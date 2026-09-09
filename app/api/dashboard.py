@@ -318,6 +318,10 @@ async def dashboard_tools_run(
     if result is not None:
         scenario_name = action if action != "custom" else (scenario or "full_approval")
         await record_demo_ledger_event(issue_key, scenario_name, result.status)
+        # Re-fetch so the just-written demo.* row is visible without a manual
+        # refresh (events/data above are pre-run snapshots; cleanup branch already did this).
+        events = await _repo.get_webhook_events(limit=20)
+        data = get_metrics_data()
     return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": result, "cleanup_result": cleanup_result})
 
 
