@@ -54,7 +54,8 @@ class MetricsMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        start = time.time()
+        # Monotonic clock for durations (wall-clock time.time() would skew on NTP steps)
+        start = time.perf_counter()
         _requests_total += 1
         status_code: int | None = None
 
@@ -75,4 +76,4 @@ class MetricsMiddleware:
                 _failures_total += 1
             raise
         finally:
-            _request_duration_sum += time.time() - start
+            _request_duration_sum += time.perf_counter() - start

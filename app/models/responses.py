@@ -15,6 +15,10 @@ class TeamsConnectionInfo(BaseModel):
 
     connected: bool
     details: str
+    # False when no webhook URL is set at all — informational, never degrades
+    # overall health. Defaults True so existing payloads stay unchanged
+    # (exclude_defaults omits it unless explicitly False).
+    configured: bool = True
 
 
 class HealthResponse(BaseModel):

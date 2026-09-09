@@ -97,6 +97,12 @@ async def run_test_suite(timeout: int = 120) -> TestRunResult:
     env = dict(os.environ)
     env["APP_ENV"] = "test"
     env["DATABASE_PATH"] = str(temp_db)
+    # Scrub outbound-only integrations: the suite drives release_ready paths
+    # (meeting callbacks) that POST Teams alerts. A Teams URL inherited here
+    # would page real customers on every dashboard test run — and no test ever
+    # asserts delivery, so there is nothing to lose by removing it.
+    for _secret in ("TEAMS_WORKFLOW_WEBHOOK_URL", "TEAMS_WEBHOOK_URL"):
+        env.pop(_secret, None)
 
     cmd = [
         sys.executable, "-m", "pytest",

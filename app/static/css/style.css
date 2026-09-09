@@ -200,6 +200,8 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .pipeline-seg.seg-pending { background:var(--warning); }
 .pipeline-seg.seg-failed { background:var(--danger); }
 .pipeline-seg.seg-rejected { background:#b0295a; }
+.pipeline-seg.seg-meeting { background:#a583ff; }
+.pipeline-seg.seg-todo { background:var(--muted); }
 .pipeline-legend { display:flex; flex-wrap:wrap; gap:10px 16px; margin-top:12px; }
 .pipeline-legend-item { display:inline-flex; align-items:center; gap:5px; color:#8a8e96; font-size:10px; }
 .pipeline-legend-dot { width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
@@ -243,8 +245,9 @@ tbody tr:hover td { background: rgba(255,255,255,.02); }
 }
 .badge-validated, .badge-approved, .badge-sdl-approved, .badge-sdm-approved, .badge-release-ready { background: rgba(47,204,102,.12); color:#2fcc66; border-color: rgba(47,204,102,.25); }
 .badge-validated-with-notes, .badge-validated_with_notes { background: rgba(139,195,74,.15); color:#8bc34a; border-color: rgba(139,195,74,.3); }
-.badge-pending, .badge-sdl-requested, .badge-sdm-requested { background: rgba(233,184,74,.12); color:#e9b84a; border-color: rgba(233,184,74,.25); }
+.badge-pending, .badge-requested, .badge-sdl-requested, .badge-sdm-requested { background: rgba(233,184,74,.12); color:#e9b84a; border-color: rgba(233,184,74,.25); }
 .badge-rejected, .badge-failed, .badge-sdl-rejected, .badge-sdm-rejected, .badge-validation-failed, .badge-validation_failed { background: rgba(240,97,88,.12); color:#f06158; border-color: rgba(240,97,88,.25); }
+.badge-error { background: rgba(240,97,88,.12); color:#f06158; border-color: rgba(240,97,88,.25); }
 .badge-meeting-scheduled { background: rgba(122,77,232,.14); color:#a583ff; border-color: rgba(122,77,232,.3); }
 .badge-meeting { background: rgba(122,77,232,.14); color:#a583ff; border-color:var(--line); }
 .badge-none { background:rgba(255,255,255,.04); color:#8a8e96; border-color:var(--line); }
@@ -292,12 +295,19 @@ code { font-family:'JetBrains Mono', monospace; font-size:11px; background:#0a0c
 .result-card { margin-top:20px; }
 .result-card.result-ok { border-color: rgba(47,204,102,.25); }
 .result-card.result-rejected { border-color: rgba(240,97,88,.25); }
+.result-card.result-pending_sdl, .result-card.result-pending_sdm { border-color: rgba(233,184,74,.25); }
+.result-card.result-validation_failed { border-color: rgba(240,97,88,.25); }
+.result-card.result-validated_with_notes { border-color: rgba(139,195,74,.35); }
 .result-header.result-ok, .tool-result.result-ok { background: rgba(47,204,102,.12); }
 .result-header.result-rejected, .tool-result.result-rejected { background: rgba(240,97,88,.12); }
+.result-header.result-pending_sdl, .result-header.result-pending_sdm, .tool-result.result-pending_sdl, .tool-result.result-pending_sdm { background: rgba(233,184,74,.12); }
+.result-header.result-validation_failed, .tool-result.result-validation_failed { background: rgba(240,97,88,.12); }
+.result-header.result-validated_with_notes, .tool-result.result-validated_with_notes { background: rgba(139,195,74,.15); }
 .result-dot { width:10px; height:10px; border-radius:50%; display:inline-block; background:#666b75; }
 .result-dot.result-ok { background:#2fcc66; }
 .result-dot.result-rejected, .result-dot.result-validation_failed { background:#f06158; }
 .result-dot.result-pending_sdl, .result-dot.result-pending_sdm { background:#e9b84a; }
+.result-dot.result-validated_with_notes { background:#8bc34a; }
 .tool-result { margin-top:14px; padding:12px; border:1px solid var(--line); border-radius:5px; }
 .pipeline-seg { min-width:2px; }
 .page-header-actions { display:flex; gap:8px; flex-wrap:wrap; }
@@ -366,6 +376,8 @@ body.light .badge { background:#eef1f6; color:#4d596d; border-color:rgba(24,32,4
 body.light .badge-validated, body.light .badge-approved, body.light .badge-sdl-approved, body.light .badge-sdm-approved, body.light .badge-release-ready { background:#e8f6ed; color:#168943; border-color:rgba(22,137,67,.25); }
 body.light .badge-pending, body.light .badge-requested, body.light .badge-sdl-requested, body.light .badge-sdm-requested { background:#fff5dc; color:#946500; border-color:rgba(183,121,0,.25); }
 body.light .badge-rejected, body.light .badge-failed, body.light .badge-sdl-rejected, body.light .badge-sdm-rejected, body.light .badge-validation-failed, body.light .badge-validation_failed { background:#ffebe9; color:#c9362d; border-color:rgba(201,54,45,.25); }
+body.light .badge-error { background:#ffebe9; color:#c9362d; border-color:rgba(201,54,45,.25); }
+body.light .badge-validated-with-notes, body.light .badge-validated_with_notes { background:#f0f6e4; color:#5c7a1e; border-color:rgba(139,195,74,.4); }
 body.light .badge-meeting, body.light .badge-meeting-scheduled { background:#f0eaff; color:#6941d8; border-color:rgba(105,65,216,.25); }
 
 /* Consistent vertical rhythm across dashboard surfaces. */

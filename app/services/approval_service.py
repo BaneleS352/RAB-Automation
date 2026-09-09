@@ -166,7 +166,7 @@ class ApprovalService:
                     "next_step": None,
                 }
 
-        return {"error": f"Unknown action: {action}"}
+        return {"error": f"Unknown action: {action}", "next_step": None}
 
     def is_fully_approved(self, issue_key: str) -> bool:
         state = self.get_approval(issue_key)

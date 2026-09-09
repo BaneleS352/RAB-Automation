@@ -7,7 +7,7 @@
         <h1>RAB Audit Records</h1>
         <p class="muted" style="margin:0;">Search, filter and inspect the monitored Jira issues.</p>
     </div>
-    <a class="btn btn-outline btn-sm" href="/dashboard/records?status={{ status }}&q={{ q }}">↻ Refresh</a>
+    <a class="btn btn-outline btn-sm" href="/dashboard/records?status={{ status | urlencode }}&q={{ q | urlencode }}">↻ Refresh</a>
 </div>
 
 <form method="get" action="/dashboard/records" class="filter-form">
@@ -47,9 +47,9 @@
                 <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
                 <td>{% if r.jira_exists %}<span class="badge badge-approved">Existing</span>{% else %}<span class="badge badge-rejected">Removed</span>{% endif %}</td>
                 <td><small style="color:var(--text-2);">{{ r.summary[:40] }}{% if r.summary|length > 40 %}…{% endif %}</small></td>
-                <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
-                <td><span class="badge badge-{{ r.sdl_approval }}">{{ r.sdl_approval }}</span></td>
-                <td><span class="badge badge-{{ r.sdm_approval }}">{{ r.sdm_approval }}</span></td>
+                <td><span class="badge {{ r.status | status_badge }}">{{ r.status }}</span></td>
+                <td><span class="badge {{ r.sdl_approval | status_badge }}">{{ r.sdl_approval }}</span></td>
+                <td><span class="badge {{ r.sdm_approval | status_badge }}">{{ r.sdm_approval }}</span></td>
                 <td><small style="max-width:160px; display:inline-block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.validation_result[:40] }}{% if r.validation_result|length > 40 %}…{% endif %}</small></td>
                 <td>
                     {% if r.meeting_needed %}<span class="badge badge-meeting">Yes</span>
@@ -64,13 +64,13 @@
 
 <nav class="pagination" aria-label="Pagination">
     {% if offset > 0 %}
-    <a class="btn btn-outline btn-sm" href="/dashboard/records?offset={{ [0, offset - limit] | max }}&status={{ status }}&q={{ q }}">« Previous</a>
+    <a class="btn btn-outline btn-sm" href="/dashboard/records?offset={{ [0, offset - limit] | max }}&status={{ status | urlencode }}&q={{ q | urlencode }}">« Previous</a>
     {% else %}
     <span class="btn btn-disabled btn-sm">« Previous</span>
     {% endif %}
     <span class="page-info">Page {{ (offset // limit) + 1 }} • {{ total }} total</span>
     {% if offset + limit < total %}
-    <a class="btn btn-outline btn-sm" href="/dashboard/records?offset={{ offset + limit }}&status={{ status }}&q={{ q }}">Next »</a>
+    <a class="btn btn-outline btn-sm" href="/dashboard/records?offset={{ offset + limit }}&status={{ status | urlencode }}&q={{ q | urlencode }}">Next »</a>
     {% else %}
     <span class="btn btn-disabled btn-sm">Next »</span>
     {% endif %}

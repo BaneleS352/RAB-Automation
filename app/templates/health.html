@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Overview — RAB Monitor{% endblock %}
-{% block head_extra %}<meta http-equiv="refresh" content="30">{% endblock %}
+{# NOTE: no meta-refresh here on purpose — full-page auto-reload destroys scroll
+   position and interrupts screen-reader users. Use the ↻ Refresh button above. #}
 {% block content %}
 <div class="page-header">
     <button class="menu-button" id="menuButton" aria-label="Toggle menu">☰</button>
@@ -20,13 +21,16 @@
         <span class="muted" style="margin:0;">{{ kpis.total }} tickets tracked</span>
     </div>
     {% if kpis.total %}
+    {# Rail segments form a true partition of total (all status-based, mutually exclusive). #}
     <div class="pipeline-rail-track">
         <div class="pipeline-seg seg-validated" data-width="{{ (kpis.validated / kpis.total * 100) | round(1) }}" title="Validated"></div>
         <div class="pipeline-seg seg-validated-with-notes" data-width="{{ (kpis.validated_with_notes / kpis.total * 100) | round(1) }}" title="Validated with notes"></div>
+        <div class="pipeline-seg seg-pending" data-width="{{ (kpis.in_approval / kpis.total * 100) | round(1) }}" title="In approval"></div>
         <div class="pipeline-seg seg-ready" data-width="{{ (kpis.release_ready / kpis.total * 100) | round(1) }}" title="Release ready"></div>
-        <div class="pipeline-seg seg-pending" data-width="{{ (kpis.pending_approval / kpis.total * 100) | round(1) }}" title="Pending approval"></div>
+        <div class="pipeline-seg seg-meeting" data-width="{{ (kpis.meeting_scheduled / kpis.total * 100) | round(1) }}" title="Meeting scheduled"></div>
         <div class="pipeline-seg seg-failed" data-width="{{ (kpis.validation_failed / kpis.total * 100) | round(1) }}" title="Validation failed"></div>
         <div class="pipeline-seg seg-rejected" data-width="{{ (kpis.rejected / kpis.total * 100) | round(1) }}" title="Rejected"></div>
+        <div class="pipeline-seg seg-todo" data-width="{{ (kpis.pending / kpis.total * 100) | round(1) }}" title="Pending"></div>
     </div>
     {% else %}
     <div class="pipeline-rail-track"></div>
@@ -34,10 +38,12 @@
     <div class="pipeline-legend">
         <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--success);"></span>Validated <span class="count">{{ kpis.validated }}</span></span>
         <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:#8bc34a;"></span>With notes <span class="count">{{ kpis.validated_with_notes }}</span></span>
+        <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--warning);"></span>In approval <span class="count">{{ kpis.in_approval }}</span></span>
         <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--primary);"></span>Release ready <span class="count">{{ kpis.release_ready }}</span></span>
-        <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--warning);"></span>Pending approval <span class="count">{{ kpis.pending_approval }}</span></span>
+        <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:#a583ff;"></span>Meeting scheduled <span class="count">{{ kpis.meeting_scheduled }}</span></span>
         <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--danger);"></span>Validation failed <span class="count">{{ kpis.validation_failed }}</span></span>
         <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:#B0295A;"></span>Rejected <span class="count">{{ kpis.rejected }}</span></span>
+        <span class="pipeline-legend-item"><span class="pipeline-legend-dot" style="background:var(--muted);"></span>Pending <span class="count">{{ kpis.pending }}</span></span>
     </div>
 </div>
 
@@ -48,24 +54,35 @@
     <ul style="margin: 0.4rem 0 0 1.2rem; color:#856404; font-size: 0.88rem;">
         {% for w in services.get('_warnings') %}<li>{{ w }}</li>{% endfor %}
     </ul>
-    <small style="color:#856404;">Fix: set the corresponding <code>JIRA_FIELD_*</code> / <code>JIRA_PROJECT_KEY</code> / <code>JIRA_TRANSITION_*</code> in <code>.env</code>, then send a Jira webhook or open the live feed.</small>
+    <small style="color:#856404;">Fix: set the corresponding <code>JIRA_FIELD_*</code> / <code>JIRA_PROJECT_KEY</code> / <code>JIRA_TRANSITION_*</code> in <code>.env</code>, then send a Jira webhook or open <a href="/dashboard/records" style="color:#856404;">Audit Records</a>.</small>
 </div>
 {% endif %}
 <div class="health-grid">
     {% for name, info in services.items() if not name.startswith('_') %}
+    {% if name == 'teams' and not info.get('configured', True) %}
+    <div class="health-card">
+        <h2>{{ name | title }}</h2>
+        <div class="status-row">
+            <span class="dot"></span>
+            <span class="status-badge">Not configured</span>
+        </div>
+        <p class="detail">{{ info.details }}</p>
+    </div>
+    {% else %}
     <div class="health-card {{ 'status-ok' if info.connected else 'status-fail' }}">
-        <h2>{{ name }}</h2>
+        <h2>{{ name | title }}</h2>
         <div class="status-row">
             <span class="dot {{ 'dot-ok' if info.connected else 'dot-fail' }}"></span>
             <span class="status-badge">{{ 'Connected' if info.connected else 'Disconnected' }}</span>
         </div>
         <p class="detail">{{ info.details }}</p>
     </div>
+    {% endif %}
     {% endfor %}
 </div>
 
 <h2 class="section-title">Pipeline Summary <span class="section-kicker">decision-oriented</span></h2>
-<p class="muted" style="margin-top:-0.6rem; margin-bottom:0.7rem;">Populated from Jira webhook events and live Jira-backed Demo Lab runs.</p>
+<p class="muted" style="margin-top:-0.6rem; margin-bottom:0.7rem;">Populated from Jira webhook events and Demo Lab runs (live-Jira backed when ‘Use real Jira ticket’ is selected, stub/offline otherwise).</p>
 <div class="kpi-grid">
     <div class="kpi-card">
         <div class="kpi-top"><span class="kpi-icon">◈</span><span class="muted" style="font-size:0.72rem;">all</span></div>
@@ -116,9 +133,9 @@
                     {% for r in aging %}
                     <tr>
                         <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
-                        <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
-                        <td><span class="badge badge-{{ r.sdl_approval }}">{{ r.sdl_approval }}</span></td>
-                        <td><span class="badge badge-{{ r.sdm_approval }}">{{ r.sdm_approval }}</span></td>
+                        <td><span class="badge {{ r.status | status_badge }}">{{ r.status }}</span></td>
+                        <td><span class="badge {{ r.sdl_approval | status_badge }}">{{ r.sdl_approval }}</span></td>
+                        <td><span class="badge {{ r.sdm_approval | status_badge }}">{{ r.sdm_approval }}</span></td>
                         <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
                     </tr>
                     {% endfor %}
@@ -146,7 +163,7 @@
                     {% for r in failures %}
                     <tr class="table-link-row" data-detail-url="/dashboard/records/{{ r.issue_key }}" tabindex="0" role="link" aria-label="Open {{ r.issue_key }} details">
                         <td><a href="/dashboard/records/{{ r.issue_key }}">{{ r.issue_key }}</a></td>
-                        <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
+                        <td><span class="badge {{ r.status | status_badge }}">{{ r.status }}</span></td>
                         <td><small>{{ r.validation_result[:60] }}{% if r.validation_result|length > 60 %}…{% endif %}</small></td>
                         <td><small>{{ r.updated_at[:19] | replace('T', ' ') }}</small></td>
                     </tr>

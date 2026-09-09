@@ -101,7 +101,7 @@
                 <thead><tr><th>ID</th><th>Event ID</th><th>Issue</th><th>Type</th><th>Status</th><th>Received</th></tr></thead>
                 <tbody>
                 {% for e in events %}
-                <tr class="table-link-row" data-detail-url="/dashboard/records/{{ e.issue_key }}" tabindex="0" role="link" aria-label="Open {{ e.issue_key }} details"><td><small style="color:var(--muted);">{{ e.id }}</small></td><td><code style="font-size:0.75rem;">{{ e.event_id[:14] }}…</code></td><td><a href="/dashboard/records/{{ e.issue_key }}"><strong>{{ e.issue_key }}</strong></a></td><td><small>{{ e.event_type }}</small></td><td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td><td><small style="font-family:'JetBrains Mono',monospace; color:var(--muted);">{{ e.created_at[:19] | replace('T',' ') }}</small></td></tr>
+                <tr class="table-link-row" data-detail-url="/dashboard/records/{{ e.issue_key }}" tabindex="0" role="link" aria-label="Open {{ e.issue_key }} details"><td><small style="color:var(--muted);">{{ e.id }}</small></td><td><code style="font-size:0.75rem;">{{ e.event_id[:14] }}…</code></td><td><a href="/dashboard/records/{{ e.issue_key }}"><strong>{{ e.issue_key }}</strong></a></td><td><small>{{ e.event_type }}</small></td><td><span class="badge {{ e.status | status_badge }}">{{ e.status }}</span></td><td><small style="font-family:'JetBrains Mono',monospace; color:var(--muted);">{{ e.created_at[:19] | replace('T',' ') }}</small></td></tr>
                 {% endfor %}
                 </tbody>
             </table>

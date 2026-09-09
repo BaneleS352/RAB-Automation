@@ -101,10 +101,59 @@ class TestDashboardOverview:
         assert "Waiting for Approval" in body
         assert "Recent Failures" in body
 
-    def test_auto_refreshes(self, client: TestClient) -> None:
+    def test_manual_refresh_control(self, client: TestClient) -> None:
+        # No meta-refresh: full-page auto-reload destroys scroll position and
+        # interrupts assistive tech; the explicit Refresh button is the contract.
         body = client.get("/dashboard/health").text
-        assert 'http-equiv="refresh"' in body
+        assert 'http-equiv="refresh"' not in body
         assert "Refresh" in body
+
+
+class TestStatusBadgeFilter:
+    """Every badge class emitted into HTML must exist in style.css (both themes)."""
+
+    DEFINED = {
+        "badge-validated", "badge-validated-with-notes", "badge-validated_with_notes",
+        "badge-approved", "badge-sdl-approved", "badge-sdm-approved",
+        "badge-pending", "badge-requested", "badge-sdl-requested", "badge-sdm-requested",
+        "badge-rejected", "badge-failed", "badge-sdl-rejected", "badge-sdm-rejected",
+        "badge-validation-failed", "badge-validation_failed",
+        "badge-release-ready", "badge-meeting", "badge-meeting-scheduled",
+        "badge-none", "badge-error",
+    }
+
+    def test_known_statuses_map_to_defined_classes(self) -> None:
+        from app.api.dashboard import status_badge
+
+        cases = [
+            # (raw value, expected class)
+            ("validated", "badge-validated"),
+            ("validated_with_notes", "badge-validated-with-notes"),
+            ("sdl_requested", "badge-sdl-requested"),
+            ("pending", "badge-pending"),
+            ("requested", "badge-pending"),
+            ("approved", "badge-approved"),
+            ("approve", "badge-approved"),
+            ("rejected", "badge-rejected"),
+            ("reject", "badge-rejected"),
+            ("release_ready", "badge-release-ready"),
+            ("meeting_scheduled", "badge-meeting-scheduled"),
+            ("validation_failed", "badge-validation_failed"),
+            # Free-form orchestration results must never leak into class names
+            ("validation_failed: Missing required fields: QA", "badge-validation_failed"),
+            ("approval_requested_sdl", "badge-sdl-requested"),
+            ("already_in_progress", "badge-pending"),
+            ("monitored", "badge-none"),
+            ("received", "badge-none"),
+            ("error_fetching_issue_data", "badge-error"),
+            ("", "badge-none"),
+            (None, "badge-none"),
+        ]
+        for raw, expected in cases:
+            result = status_badge(raw)
+            assert result == expected, f"{raw!r} -> {result!r}, expected {expected!r}"
+            assert result in self.DEFINED, f"{result!r} not in the styled badge scale"
+            assert " " not in result and ":" not in result, f"{result!r} is not a valid CSS token"
 
 
 class TestDashboardRecordsFiltering:

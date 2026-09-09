@@ -2,8 +2,9 @@
 
 import asyncio
 import logging
-import time
 from pathlib import Path
+
+import re as _re
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -11,9 +12,8 @@ from fastapi.templating import Jinja2Templates
 
 from app.api.metrics import get_metrics_data
 from app.repositories.rab_repository import RabRepository
-from app.services.config_warnings import get_config_warnings as _config_warnings
+from app.services import health_check as _health_check_mod
 from app.services.dummy_flow import DummyFlowService
-from app.services.jira_client import JiraClient
 from app.services.test_runner import run_test_suite, TestRunResult
 from app.services.status_codes import KNOWN_STATUSES as STATUS_CODE_KNOWN_STATUSES
 
@@ -24,6 +24,46 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 _templates_dir = Path(__file__).resolve().parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_templates_dir))
 
+
+def status_badge(value: object) -> str:
+    """Normalize any workflow status/action/result string to a styled badge class.
+
+    Templates used to interpolate raw status text (e.g. ``badge-{{ e.status }}``),
+    which breaks for free-form orchestration results like
+    ``"validation_failed: Missing …"`` (spaces/colons are not valid class tokens)
+    and silently renders unstyled for values with no matching selector
+    (``pending``, ``approve``, ``received`` …). Always returns a class defined
+    in ``style.css`` (both themes); unknown values fall back to ``badge-none``.
+    """
+    v = _re.sub(r"[^a-z0-9]+", "_", str(value or "").lower()).strip("_")
+    if not v:
+        return "badge-none"
+    side = "sdl" if "sdl" in v else "sdm" if "sdm" in v else ""
+    if "validated_with_notes" in v:
+        return "badge-validated-with-notes"
+    if "validation_failed" in v or "fail" in v:
+        return "badge-validation_failed"
+    if "reject" in v:
+        return f"badge-{side}-rejected" if side else "badge-rejected"
+    # NOTE: "request" is checked before "approv" so "approval_requested_sdl"
+    # maps to requested, not approved.
+    if "request" in v or "pending" in v or "progress" in v:
+        return f"badge-{side}-requested" if side else "badge-pending"
+    if "approv" in v:
+        return f"badge-{side}-approved" if side else "badge-approved"
+    if "release_ready" in v or v == "ready":
+        return "badge-release-ready"
+    if "meeting" in v:
+        return "badge-meeting-scheduled"
+    if "validat" in v:
+        return "badge-validated"
+    if "error" in v:
+        return "badge-error"
+    return "badge-none"
+
+
+templates.env.filters["status_badge"] = status_badge
+
 _repo = RabRepository()
 # NOTE: JiraClient is constructed per request (not at import) so credential
 # changes take effect without a restart. Do not add a module-level singleton here.
@@ -31,9 +71,12 @@ _repo = RabRepository()
 _RECORDS_PAGE_SIZE = 25
 _WEBHOOK_PAGE_SIZE = 50
 
-_HEALTH_CACHE_TTL = 30.0
-_health_cache: dict = {"at": 0.0, "services": None}
-_health_lock = asyncio.Lock()
+# Shared cache lives in app.services.health_check (single live Jira check per
+# TTL window across all routes). Aliased (same objects) so existing
+# `from app.api.dashboard import _health_cache` references keep working.
+_HEALTH_CACHE_TTL = _health_check_mod._HEALTH_CACHE_TTL
+_health_cache = _health_check_mod._health_cache
+_health_lock = _health_check_mod._health_lock
 
 _test_run_lock = asyncio.Lock()
 _last_test_result: TestRunResult | None = None
@@ -91,39 +134,15 @@ async def _run_demo_scenario(svc, scenario: str, *, needs_meeting: bool = False,
 
 async def _check_connection_status() -> dict:
     """Connection status for Jira + Teams, cached to avoid hammering
-    the external API on every page load / 30s auto-refresh."""
-    now = time.monotonic()
-    if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
-        return _health_cache["services"]
+    the external API on every page load / 30s auto-refresh.
 
-    async with _health_lock:
-        # Double-check after acquiring lock
-        now = time.monotonic()
-        if _health_cache["services"] is not None and now - _health_cache["at"] < _HEALTH_CACHE_TTL:
-            return _health_cache["services"]
-        # Resolve settings once and share it (get_settings() re-parses .env per call).
-        from app.config import get_settings
-        settings = get_settings()
-        jira_status = await JiraClient(settings).check_connection()
-        # Teams is alerting-only; check if workflow webhook is configured
-        teams_url = settings.effective_teams_webhook_url
-        if teams_url:
-            teams_status = {"connected": True, "details": "Teams workflow webhook configured — release_ready alerts enabled (alerting basis)"}
-        else:
-            teams_status = {"connected": False, "details": "Teams workflow webhook not configured — release_ready alerts skipped (set TEAMS_WORKFLOW_WEBHOOK_URL)"}
-        details = jira_status.get("details", "Unknown")
-        warnings = _config_warnings(settings)
-        if warnings:
-            details += " | Config warnings: " + "; ".join(warnings)
+    Delegates to the shared app.services.health_check cache so /health and the
+    dashboard trigger at most one live Jira check per TTL window (previously
+    each kept its own cache and each called Jira on a miss).
+    """
+    from app.services.health_check import get_service_statuses
 
-        services = {
-            "jira": {"connected": jira_status.get("connected", False), "details": details},
-            "teams": {"connected": teams_status["connected"], "details": teams_status["details"]},
-            "_warnings": warnings,
-        }
-        _health_cache["at"] = now
-        _health_cache["services"] = services
-        return services
+    return await get_service_statuses()
 
 _KNOWN_STATUSES: list[str] = STATUS_CODE_KNOWN_STATUSES
 
@@ -134,10 +153,20 @@ async def dashboard_health(request: Request, aging_days: int = Query(2, ge=1)) -
 
     counts = await _repo.get_status_counts()
     pending = await _repo.get_pending_approval_count()
+    in_approval = sum(counts.get(s, 0) for s in (
+        "sdl_requested", "sdm_requested", "sdl_approved", "sdm_approved",
+    ))
     kpis = {
         "total": sum(counts.values()),
         "validated": counts.get("validated", 0),
         "validated_with_notes": counts.get("validated_with_notes", 0),
+        # NOTE: the pipeline rail below must stay a true partition of total.
+        # Keep it status-based only: `pending_approval` is approval-column based
+        # and overlaps status buckets (double-count), so the rail uses the
+        # mutually exclusive `in_approval` (+ `pending`) instead. The KPI card
+        # keeps `pending_approval` since aging uses the same definition.
+        "in_approval": in_approval,
+        "pending": counts.get("pending", 0),
         "pending_approval": pending,
         "release_ready": counts.get("release_ready", 0),
         "meeting_scheduled": counts.get("meeting_scheduled", 0),
@@ -349,7 +378,15 @@ async def dashboard_test_form(request: Request) -> HTMLResponse:
 
 @router.post("/test", response_class=HTMLResponse)
 async def dashboard_test(request: Request) -> HTMLResponse:
-    """Run the pytest suite with token gating and single-flight lock."""
+    """Run the pytest suite with token gating and single-flight lock.
+
+    NOTE (proxy timeouts): the suite runs inline, up to run_test_suite's
+    timeout (default 120s). If a reverse proxy times out first (e.g. nginx
+    default 60s), the client sees a 504 but the run continues server-side;
+    retrying is safe — the single-flight lock returns the "already in
+    progress" notice instead of starting a duplicate run. Keep any proxy
+    read-timeout above the suite timeout, or accept the notice-based retry.
+    """
     _require_feature(request, "ENABLE_TEST_UI")
     global _last_test_result
     from app.config import get_settings

@@ -10,52 +10,6 @@
     <a class="btn btn-ghost btn-sm" href="/dashboard/demo">Reset</a>
 </div>
 
-{% if false %}<!-- Seed dataset CTA — removed: no database-only issue seeding -->
-<div class="card" style="margin-top:1rem; border-color: var(--primary); background: linear-gradient(135deg, var(--primary-soft) 0%, #fff 60%);">
-    <div class="card-body" style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
-        <div>
-            <strong style="font-size:0.95rem;">Populate the whole pipeline</strong>
-            <p class="muted" style="margin:0.2rem 0 0;">Creates one live Jira ticket in <code>{{ 'TEST' if real_available else 'the configured Jira project' }}</code> for each scenario, then runs the approval workflow against that ticket.</p>
-            {% if not real_available %}<p class="muted" style="margin:0.2rem 0 0; color:var(--warning);">Jira is not configured. Set <code>JIRA_BASE_URL</code>, <code>JIRA_EMAIL</code>, and <code>JIRA_API_TOKEN</code> before running Demo Lab.</p>{% endif %}
-        </div>
-        <form method="post" action="/dashboard/demo" style="margin:0; display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-            <input type="hidden" name="scenario" value="seed">
-            <input type="hidden" name="issue_key" value="DEMO-SEED">
-            <span class="badge">Live Jira only</span>
-            <button type="submit" class="btn btn-primary">Seed demo dataset →</button>
-        </form>
-    </div>
-</div>
-
-{% if seed_results %}
-<div class="card" style="margin-top:1rem;">
-    <div class="card-header">
-        <h3>Seeded {{ seed_results|length }} issues</h3>
-        <a class="btn btn-outline btn-sm" href="/dashboard/health">View pipeline summary</a>
-    </div>
-    <div class="card-body" style="padding:0;">
-        <div class="table-wrapper" style="border:none; box-shadow:none;">
-            <table>
-                <thead><tr><th>Issue</th><th>Summary</th><th>Status</th></tr></thead>
-                <tbody>
-                {% for r in seed_results %}
-                    <tr>
-                        <td><a href="/dashboard/records/{{ r.issue_key }}"><strong>{{ r.issue_key }}</strong></a></td>
-                        <td><small>{{ r.steps[0].detail[:60] }}</small></td>
-                        <td><span class="badge badge-{{ r.status | replace('_', '-') }}">{{ r.status }}</span></td>
-                    </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        <div style="padding:0.9rem 1.25rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-            <a class="btn btn-primary btn-sm" href="/dashboard/health">See pipeline KPIs</a>
-            <a class="btn btn-outline btn-sm" href="/dashboard/records">Browse issues</a>
-        </div>
-    </div>
-</div>
-{% endif %}{% endif %}
-
 <div class="card" style="margin-top:1rem;">
     <div class="card-header">
         <h3>Run single scenario</h3>
@@ -140,7 +94,7 @@
         </div>
     </div>
 </div>
-{% elif not seed_results %}
+{% else %}
 <div class="empty-state" style="margin-top:1rem;">
     <div style="font-size:1.2rem; margin-bottom:0.4rem;">▶ Run a ticket scenario</div>
     <span class="muted">Each run persists to the audit trail and updates the <a href="/dashboard/health">pipeline summary</a> KPIs.</span>
