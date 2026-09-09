@@ -87,6 +87,66 @@ class TestDemoEndpoint:
         step_names = [s["step"] for s in data["steps"]]
         assert "sdl_rejection" in step_names
 
+class TestDemoLiveKeyReuse:
+    """Re-runs with real Jira must reuse the minted ticket, not spam new ones."""
+
+    class _FakeJira:
+        def __init__(self, missing: set[str] | None = None) -> None:
+            self.created = 0
+            self.missing = missing or set()
+
+        async def create_issue(self, *args, **kwargs) -> dict:
+            self.created += 1
+            return {"key": "TEST-900"}
+
+        async def get_issue(self, key: str, fields=None) -> dict:
+            if key in self.missing:
+                from app.services.jira_client import JiraClientError
+                raise JiraClientError("HTTP 404: gone", status_code=404)
+            return {"key": key}
+
+    def _svc_with_fake(self, key: str, fake) -> DummyFlowService:
+        svc = DummyFlowService(issue_key=key, use_real_jira=False)
+        svc.use_real_jira = True
+        svc.orchestrator.jira_client = fake
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_rerun_reuses_live_ticket(self) -> None:
+        fake = self._FakeJira()
+        svc1 = self._svc_with_fake("REUSE-T1", fake)
+        await svc1._ensure_real_issue()
+        assert svc1.issue_key == "TEST-900"
+        assert fake.created == 1
+        svc2 = self._svc_with_fake("REUSE-T1", fake)
+        await svc2._ensure_real_issue()
+        assert svc2.issue_key == "TEST-900"
+        assert fake.created == 1  # no second live ticket
+
+    @pytest.mark.asyncio
+    async def test_deleted_live_ticket_remints(self) -> None:
+        fake = self._FakeJira()
+        svc1 = self._svc_with_fake("REUSE-T2", fake)
+        await svc1._ensure_real_issue()
+        assert fake.created == 1
+        fake.missing.add("TEST-900")
+        svc2 = self._svc_with_fake("REUSE-T2", fake)
+        await svc2._ensure_real_issue()
+        assert svc2.issue_key == "TEST-900"
+        assert fake.created == 2
+
+
+class TestDemoEndpointLedger:
+    @pytest.fixture(autouse=True)
+    def _set_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("JIRA_WEBHOOK_URL", "http://testserver/webhooks/jira")
+        monkeypatch.setenv("APP_ENV", "test")
+
+    @pytest.fixture()
+    def client(self) -> TestClient:
+        from app.main import create_app
+        return TestClient(create_app())
+
     @pytest.mark.asyncio
     async def test_demo_run_writes_webhook_ledger(self, client: TestClient) -> None:
         # Synthetic runs must appear in Webhook Activity as demo.* entries —

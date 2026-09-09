@@ -114,7 +114,13 @@ class DummyFlowService:
         self.steps.append({"step": step, "detail": detail})
 
     async def _ensure_real_issue(self) -> None:
-        """Create a live Jira issue for a new demo key, or use the supplied existing Jira key."""
+        """Reuse the live Jira issue minted for this demo key, or create one.
+
+        Previously EVERY run minted a brand-new live ticket (DEMO-1 → TEST-27,
+        then TEST-28, ...), spamming the project. The demo_key → live_key
+        mapping is persisted in demo_live_keys so re-runs reuse the same
+        ticket; a mapping pointing at a deleted issue is dropped and reminted.
+        """
         if not self.use_real_jira:
             return
         client = getattr(self.orchestrator, "jira_client", None)
@@ -124,6 +130,25 @@ class DummyFlowService:
         # Any other demo key is only a client-side label used to request a new ticket.
         if self.issue_key and self.issue_key.startswith(f"{self._real_project}-"):
             return
+        demo_key = self.issue_key
+        mapped = await self.rab_repo.get_demo_live_key(demo_key)
+        if mapped:
+            try:
+                await client.get_issue(mapped, fields="id")
+            except Exception as e:
+                if getattr(e, "status_code", None) == 404:
+                    logger.info("Demo Lab live ticket %s for %s is gone — minting a fresh one", mapped, demo_key)
+                    await self.rab_repo.clear_demo_live_key(demo_key)
+                    mapped = None
+                else:
+                    # Transient Jira error: fail open by minting fresh would
+                    # spam duplicates, so reuse the mapped key and let the flow
+                    # surface the real error if the issue is truly unusable.
+                    logger.warning("Demo Lab could not verify live ticket %s — reusing: %s", mapped, e)
+            if mapped:
+                logger.info("Demo Lab reusing live Jira issue %s for %s", mapped, demo_key)
+                self.issue_key = mapped
+                return
         try:
             from app.config import get_settings
             settings = get_settings()
@@ -180,6 +205,8 @@ class DummyFlowService:
             real_key = result.get("key") or result.get("id")
             if real_key and real_key != self.issue_key:
                 logger.info("Demo Lab real Jira issue created: %s -> %s (project %s)", self.issue_key, real_key, project)
+                # Remember the mapping so the next run reuses this ticket
+                await self.rab_repo.set_demo_live_key(demo_key, real_key)
                 # Switch to real key for this run
                 self.issue_key = real_key
         except Exception:

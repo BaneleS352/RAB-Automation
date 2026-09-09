@@ -118,6 +118,17 @@ async def test_get_pending_approval_count_counts_requested_columns(repo: RabRepo
 
 
 @pytest.mark.asyncio
+async def test_demo_live_key_round_trip(repo: RabRepository) -> None:
+    assert await repo.get_demo_live_key("DEMO-T") is None
+    await repo.set_demo_live_key("DEMO-T", "TEST-999")
+    assert await repo.get_demo_live_key("DEMO-T") == "TEST-999"
+    await repo.set_demo_live_key("DEMO-T", "TEST-1000")
+    assert await repo.get_demo_live_key("DEMO-T") == "TEST-1000"
+    await repo.clear_demo_live_key("DEMO-T")
+    assert await repo.get_demo_live_key("DEMO-T") is None
+
+
+@pytest.mark.asyncio
 async def test_record_approval_event_invalid_step_leaves_no_orphan(repo: RabRepository) -> None:
     # Validation must happen before the INSERT — previously the event row was
     # committed and then ValueError raised, leaving a phantom approval event.

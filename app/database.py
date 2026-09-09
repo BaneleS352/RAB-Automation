@@ -215,6 +215,14 @@ async def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_approval_issue ON approval_events(issue_key);
         CREATE INDEX IF NOT EXISTS idx_webhook_event_id ON webhook_events(event_id);
         CREATE INDEX IF NOT EXISTS idx_field_change_issue ON field_change_events(issue_key);
+
+        -- Demo Lab live-ticket reuse: remember which live Jira issue was minted
+        -- for a demo key so re-runs reuse it instead of spamming new tickets.
+        CREATE TABLE IF NOT EXISTS demo_live_keys (
+            demo_key        TEXT PRIMARY KEY,
+            live_key        TEXT NOT NULL,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
     """)
     await db.commit()
     await _migrate(db)

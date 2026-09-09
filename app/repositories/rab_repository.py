@@ -346,3 +346,27 @@ class RabRepository:
         # returned "new" instead of "replay").
         await db.execute("DELETE FROM field_change_events WHERE issue_key = ?", (issue_key,))
         await db.commit()
+
+    async def get_demo_live_key(self, demo_key: str) -> str | None:
+        """Live Jira key previously minted for a demo key (reuse across re-runs)."""
+        db = await get_db()
+        rows = await db.execute_fetchall(
+            "SELECT live_key FROM demo_live_keys WHERE demo_key = ?", (demo_key,)
+        )
+        return rows[0]["live_key"] if rows else None
+
+    async def set_demo_live_key(self, demo_key: str, live_key: str) -> None:
+        """Remember the live Jira key minted for a demo key (idempotent)."""
+        db = await get_db()
+        await db.execute(
+            "INSERT INTO demo_live_keys (demo_key, live_key) VALUES (?, ?) "
+            "ON CONFLICT(demo_key) DO UPDATE SET live_key = excluded.live_key",
+            (demo_key, live_key),
+        )
+        await db.commit()
+
+    async def clear_demo_live_key(self, demo_key: str) -> None:
+        """Forget a demo→live mapping (e.g. the live issue was deleted)."""
+        db = await get_db()
+        await db.execute("DELETE FROM demo_live_keys WHERE demo_key = ?", (demo_key,))
+        await db.commit()
