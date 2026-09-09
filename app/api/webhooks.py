@@ -91,6 +91,10 @@ async def _process_webhook(
     seen = await rab_repo.record_webhook_event(event_id, issue_key, payload.webhookEvent or "")
     if not seen:
         logger.info("Duplicate webhook (idempotency_key=%s) — returning cached result", event_id)
+        # Default for the lost-ledger race (row reported duplicate but not
+        # found — e.g. cross-process delete): previously `result` was unbound
+        # here and the retry path crashed with UnboundLocalError → 500.
+        result = ""
         event = await rab_repo.get_webhook_event(event_id)
         if event:
             result = event.get("status") or ""

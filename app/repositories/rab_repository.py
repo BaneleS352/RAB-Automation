@@ -86,6 +86,11 @@ class RabRepository:
         approver: str = "", reason: str = "",
     ) -> None:
         self._validate_columns({"step": step, "action": action}, ALLOWED_EVENT_COLUMNS)
+        # Validate BEFORE any I/O: the old order committed the INSERT first, so
+        # an invalid step persisted an orphan event row and then raised.
+        col = f"{step.lower()}_approval"
+        if col not in ALLOWED_RAB_COLUMNS:
+            raise ValueError(f"Invalid approval column: {col}")
         db = await get_db()
         # Ensure the parent record exists first: otherwise the event row below is
         # orphaned and the status UPDATE silently affects 0 rows while callers
@@ -101,9 +106,6 @@ class RabRepository:
         )
         await db.commit()
 
-        col = f"{step.lower()}_approval"
-        if col not in ALLOWED_RAB_COLUMNS:
-            raise ValueError(f"Invalid approval column: {col}")
         approval_status = _APPROVAL_STATUS_MAP.get(action, action)
         record_status = f"{step.lower()}_{approval_status}"
         is_reject = action == "reject"
@@ -338,6 +340,9 @@ class RabRepository:
         db = await get_db()
         await db.execute("DELETE FROM rab_records WHERE issue_key = ?", (issue_key,))
         await db.execute("DELETE FROM approval_events WHERE issue_key = ?", (issue_key,))
-        await db.execute("DELETE FROM webhook_events WHERE issue_key = ?", (issue_key,))
+        # NOTE: webhook_events rows are deliberately KEPT — they are the
+        # event_id UNIQUE dedup ledger. Deleting them made redelivered Jira
+        # webhooks process twice (proven live: redelivery after delete
+        # returned "new" instead of "replay").
         await db.execute("DELETE FROM field_change_events WHERE issue_key = ?", (issue_key,))
         await db.commit()

@@ -106,6 +106,30 @@ class TestJiraWebhookMissingIssueKey:
         assert data["detail"] == "Missing Jira issue key in webhook payload"
 
 
+class TestJiraWebhookLostLedgerRace:
+    """Duplicate report but ledger row missing (e.g. cross-process delete).
+
+    Previously `result` was unbound on this path and the retry endpoint
+    crashed with UnboundLocalError → 500. Must reprocess (at-least-once)
+    and return 200 instead.
+    """
+
+    def test_missing_row_reprocesses_without_500(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.api import webhooks as webhooks_mod
+
+        async def fake_record(event_id: str, issue_key: str, event_type: str) -> bool:
+            return False  # claims duplicate
+
+        async def fake_get(event_id: str):  # noqa: ANN202
+            return None  # ...but the row is gone
+
+        monkeypatch.setattr(webhooks_mod.rab_repo, "record_webhook_event", fake_record)
+        monkeypatch.setattr(webhooks_mod.rab_repo, "get_webhook_event", fake_get)
+        data = client.post("/webhooks/jira", json=VALID_PAYLOAD).json()
+        assert data["status"] == "accepted"
+        assert data["idempotent_replay"] is False
+
+
 class TestJiraWebhookMissingIssueObject:
     """Payloads without an issue object at all."""
 

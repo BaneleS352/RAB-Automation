@@ -118,6 +118,25 @@ async def test_get_pending_approval_count_counts_requested_columns(repo: RabRepo
 
 
 @pytest.mark.asyncio
+async def test_record_approval_event_invalid_step_leaves_no_orphan(repo: RabRepository) -> None:
+    # Validation must happen before the INSERT — previously the event row was
+    # committed and then ValueError raised, leaving a phantom approval event.
+    with pytest.raises(ValueError):
+        await repo.record_approval_event("ORPHAN-T", "foo", "approve")
+    assert await repo.get_approval_events("ORPHAN-T") == []
+
+
+@pytest.mark.asyncio
+async def test_delete_record_keeps_webhook_dedup_ledger(repo: RabRepository) -> None:
+    # The event_id ledger must survive demo resets, or redelivered webhooks
+    # process twice instead of replaying.
+    assert await repo.record_webhook_event("ledger-keep", "LEDGER-T", "jira:issue_updated") is True
+    await repo.delete_record("LEDGER-T")
+    assert await repo.get_webhook_event("ledger-keep") is not None
+    assert await repo.record_webhook_event("ledger-keep", "LEDGER-T", "jira:issue_updated") is False
+
+
+@pytest.mark.asyncio
 async def test_get_aging_records_uses_column_condition(repo: RabRepository) -> None:
     from app.database import get_db
 
