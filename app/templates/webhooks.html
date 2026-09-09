@@ -2,9 +2,10 @@
 {% block title %}Webhooks — RAB Monitor{% endblock %}
 {% block content %}
 <div class="page-header">
+    <button class="menu-button" id="menuButton" aria-label="Toggle menu">☰</button>
     <div>
         <h1>Webhook Activity</h1>
-        <p class="muted" style="margin:0;">Recent Jira deliveries recorded in <code>webhook_events</code> • idempotent by <code>X-Idempotency-Key</code></p>
+        <p class="muted" style="margin:0;">Jira deliveries (<code>POST /webhooks/jira</code>) + Demo Lab / Tools runs (<code>demo.*</code>) recorded in <code>webhook_events</code> • Jira deliveries idempotent by <code>X-Idempotency-Key</code></p>
     </div>
     <a class="btn btn-outline btn-sm" href="/dashboard/webhooks">↻ Refresh</a>
 </div>
@@ -28,7 +29,7 @@
                 <td><small style="color:var(--muted);">{{ e.id }}</small></td>
                 <td><code style="font-size:0.78rem;">{{ e.event_id[:16] }}…</code></td>
                 <td><a href="/dashboard/records/{{ e.issue_key }}"><strong>{{ e.issue_key }}</strong></a></td>
-                <td><span class="badge" style="background:var(--surface-2); color:var(--text-2);">{{ e.event_type }}</span></td>
+                <td>{% if e.event_type.startswith('demo.') %}<span class="badge badge-meeting-scheduled" title="Synthetic run from Demo Lab / Tools, not a live Jira delivery">Demo</span> {% endif %}<span class="badge" style="background:var(--surface-2); color:var(--text-2);">{{ e.event_type }}</span></td>
                 <td><span class="badge {{ e.status | status_badge }}">{{ e.status }}</span></td>
                 <td><small style="color:var(--muted); font-family:'JetBrains Mono', monospace;">{{ e.created_at[:19] | replace('T', ' ') }}</small></td>
             </tr>
@@ -39,7 +40,7 @@
 {% else %}
 <div class="empty-state">
     <div style="font-size:1.2rem; margin-bottom:0.4rem;">— No webhook events yet —</div>
-    <span class="muted">Send a Jira webhook to <code>/webhooks/jira</code> or run the <a href="/dashboard/demo">demo</a>. Only deliveries to <code>POST /webhooks/jira</code> appear here — Demo Lab runs drive the orchestrator directly and do not create ledger entries.</span>
+    <span class="muted">Send a Jira webhook to <code>POST /webhooks/jira</code>, or run the <a href="/dashboard/demo">demo</a> / <a href="/dashboard/tools">tools</a> — synthetic runs are logged here as <code>demo.*</code> entries.</span>
 </div>
 {% endif %}
 {% endblock %}

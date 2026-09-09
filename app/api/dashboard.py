@@ -132,6 +132,29 @@ async def _run_demo_scenario(svc, scenario: str, *, needs_meeting: bool = False,
     return await method()
 
 
+async def record_demo_ledger_event(issue_key: str, scenario: str, fallback_status: str = "") -> None:
+    """Write a synthetic ledger entry so Demo/Tools runs show in Webhook Activity.
+
+    Real Jira deliveries arrive via POST /webhooks/jira; Demo Lab and Tools drive
+    the orchestrator directly and previously left the ledger (and the Webhooks
+    page) permanently empty. Entries use a `demo.*` event_type plus a `demo:`-
+    prefixed random event_id so they read as synthetic and can never collide
+    with real deliveries. Fire-and-forget: a ledger failure must never break a
+    demo run, so all errors are swallowed to a warning.
+    """
+    import uuid as _uuid
+
+    event_type = f"demo.{scenario or 'full_approval'}"
+    event_id = f"demo:{issue_key}:{_uuid.uuid4().hex[:8]}"
+    try:
+        await _repo.record_webhook_event(event_id, issue_key, event_type)
+        record = await _repo.get_record(issue_key)
+        status = (record or {}).get("status") or fallback_status or "received"
+        await _repo.update_webhook_event_status(event_id, status)
+    except Exception:
+        logger.warning("Demo ledger write failed for %s", issue_key, exc_info=True)
+
+
 async def _check_connection_status() -> dict:
     """Connection status for Jira + Teams, cached to avoid hammering
     the external API on every page load / 30s auto-refresh.
@@ -292,6 +315,9 @@ async def dashboard_tools_run(
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         result = await _run_demo_scenario(svc, scenario, needs_meeting=needs_meeting)
+    if result is not None:
+        scenario_name = action if action != "custom" else (scenario or "full_approval")
+        await record_demo_ledger_event(issue_key, scenario_name, result.status)
     return templates.TemplateResponse(request, "tools.html", {"metrics": data, "events": events, "result": result, "cleanup_result": cleanup_result})
 
 
@@ -348,6 +374,7 @@ async def dashboard_demo_run(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     # Scenario takes precedence over legacy reject/needs_meeting flags
     result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
+    await record_demo_ledger_event(issue_key, scenario or "full_approval", result.status)
     return templates.TemplateResponse(
         request,
         "demo.html",

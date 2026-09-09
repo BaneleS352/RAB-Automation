@@ -29,6 +29,10 @@ async def _check_services() -> dict:
         "teams": TeamsConnectionInfo(
             **{k: raw["teams"][k] for k in ("connected", "details")},
             configured=raw["teams"].get("configured", True),
+            direction=raw["teams"].get("direction", "outbound-only"),
+            outbound_details=raw["teams"].get("outbound_details", ""),
+            inbound_supported=raw["teams"].get("inbound_supported", False),
+            inbound_details=raw["teams"].get("inbound_details", ""),
         ),
     }
     # Expose warnings separately for dashboard banner (not part of health JSON contract, but available via health_details)

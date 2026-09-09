@@ -59,14 +59,18 @@
 {% endif %}
 <div class="health-grid">
     {% for name, info in services.items() if not name.startswith('_') %}
-    {% if name == 'teams' and not info.get('configured', True) %}
-    <div class="health-card">
-        <h2>{{ name | title }}</h2>
+    {% if name == 'teams' %}
+    {# Teams is directional: outbound alerts (workflow webhook, POST-only) vs inbound approvals (needs a callback receiver). #}
+    {% set direction = info.get('direction', 'outbound-only') %}
+    {# Neutral unless two-way: outbound-only is the normal state, not a failure (red would imply broken). #}
+    <div class="health-card {{ 'status-ok' if direction == 'two-way' else '' }}">
+        <h2>Teams</h2>
         <div class="status-row">
-            <span class="dot"></span>
-            <span class="status-badge">Not configured</span>
+            <span class="dot {{ 'dot-ok' if direction == 'two-way' else '' }}"></span>
+            <span class="status-badge">{{ 'Two-way' if direction == 'two-way' else ('Not configured' if direction == 'unconfigured' else 'Outbound only') }}</span>
         </div>
-        <p class="detail">{{ info.details }}</p>
+        <p class="detail"><strong>Outbound</strong> (alerts → Teams): {{ info.get('outbound_details') or info.details }}</p>
+        <p class="detail"><strong>Inbound</strong> (approvals → system): {{ info.get('inbound_details', 'Not assessed.') }}</p>
     </div>
     {% else %}
     <div class="health-card {{ 'status-ok' if info.connected else 'status-fail' }}">

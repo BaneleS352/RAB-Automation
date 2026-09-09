@@ -49,6 +49,20 @@ class TestDashboardHealth:
         assert "nav" in body
         assert "Audit Records" in body
 
+    def test_teams_card_shows_direction(self, client: TestClient) -> None:
+        # No TEAMS_* URL in test env → "Not configured" + explicit direction rows.
+        body = client.get("/dashboard/health").text
+        assert "Not configured" in body
+        assert "Outbound" in body
+        assert "Inbound" in body
+        assert "approvals" in body.lower()
+
+    def test_service_cards_have_status_dots(self, client: TestClient) -> None:
+        # .dot/.status-row were used with no CSS definitions (invisible dots).
+        body = client.get("/dashboard/health").text
+        assert "status-row" in body
+        assert "dot-ok" in body or "dot-fail" in body or "dot " in body
+
 
 class TestDashboardRecords:
     def test_returns_html(self, client: TestClient) -> None:

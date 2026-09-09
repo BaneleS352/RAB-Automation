@@ -11,7 +11,13 @@ class JiraConnectionInfo(BaseModel):
 
 
 class TeamsConnectionInfo(BaseModel):
-    """Teams workflow webhook status (alerting basis only)."""
+    """Teams workflow webhook status, split by direction.
+
+    `connected`/`details` keep their legacy outbound meaning so existing
+    consumers are unaffected. Direction fields are required (no defaults) so
+    they are always serialized despite HealthResponse's exclude_defaults —
+    the Overview card and monitors must always see which way Teams flows.
+    """
 
     connected: bool
     details: str
@@ -19,6 +25,15 @@ class TeamsConnectionInfo(BaseModel):
     # overall health. Defaults True so existing payloads stay unchanged
     # (exclude_defaults omits it unless explicitly False).
     configured: bool = True
+    # "unconfigured" | "outbound-only" | "two-way" (workflow webhooks are
+    # POST-only, so "two-way" requires a mounted callback receiver).
+    direction: str
+    # Human-readable outbound assessment (alerts RAB → Teams).
+    outbound_details: str
+    # True only when Teams can send decisions back (approval-through-Teams).
+    inbound_supported: bool
+    # Human-readable inbound assessment, incl. what is missing to enable it.
+    inbound_details: str
 
 
 class HealthResponse(BaseModel):

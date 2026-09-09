@@ -76,6 +76,27 @@ class TestHealthEndpoint:
         assert calls["jira"] == 1
 
 
+class TestTeamsDirectionality:
+    def test_teams_reports_direction(self, client: TestClient) -> None:
+        teams = client.get("/health").json()["teams"]
+        assert teams["direction"] in ("unconfigured", "outbound-only", "two-way")
+        assert isinstance(teams["inbound_supported"], bool)
+        assert teams["outbound_details"]
+        assert teams["inbound_details"]
+
+    def test_teams_unconfigured_without_webhook_url(self, client: TestClient) -> None:
+        # Test env sets no TEAMS_* URL → unconfigured, never degrades overall status.
+        data = client.get("/health").json()
+        assert data["teams"]["direction"] == "unconfigured"
+        assert data["teams"]["inbound_supported"] is False
+        assert data["status"] == "ok"
+
+    def test_teams_inbound_details_names_prerequisites(self, client: TestClient) -> None:
+        details = client.get("/health").json()["teams"]["inbound_details"]
+        assert "POST /webhooks/teams" in details
+        assert "APP_PUBLIC_URL" in details
+
+
 class TestRootEndpoint:
     def test_root_redirects_to_dashboard(self, client: TestClient) -> None:
         response = client.get("/", follow_redirects=False)

@@ -36,6 +36,9 @@ async def run_demo_flow(
         result = await service.run_rejection()
     else:
         result = await service.run_full_approval(needs_meeting=needs_meeting)
+    # Same ledger as the dashboard Demo Lab so synthetic runs show in Webhook Activity.
+    from app.api.dashboard import record_demo_ledger_event
+    await record_demo_ledger_event(issue_key, "rejected" if reject else "full_approval", result.status)
     return {
         "issue_key": result.issue_key,
         "status": result.status,

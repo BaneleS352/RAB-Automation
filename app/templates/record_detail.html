@@ -2,6 +2,7 @@
 {% block title %}{{ issue_key }} — RAB Monitor{% endblock %}
 {% block content %}
 <div class="page-header">
+    <button class="menu-button" id="menuButton" aria-label="Toggle menu">☰</button>
     <div>
         <h1 style="display:flex; align-items:center; gap:0.6rem;">{{ issue_key }} {% if record %}<span class="badge {{ record.status | status_badge }}" style="font-size:0.8rem;">{{ record.status }}</span>{% endif %}</h1>
         {% if record %}<p class="muted" style="margin:0;">{{ record.summary or 'No summary' }} • updated {{ record.updated_at[:19] | replace('T', ' ') }}</p>{% endif %}

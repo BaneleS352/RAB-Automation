@@ -86,3 +86,23 @@ class TestDemoEndpoint:
         assert data["status"] == "rejected"
         step_names = [s["step"] for s in data["steps"]]
         assert "sdl_rejection" in step_names
+
+    @pytest.mark.asyncio
+    async def test_demo_run_writes_webhook_ledger(self, client: TestClient) -> None:
+        # Synthetic runs must appear in Webhook Activity as demo.* entries —
+        # previously the ledger (and page) stayed empty without live Jira traffic.
+        resp = client.post("/demo/flow", data={"issue_key": "DUMMY-LEDGER-1"})
+        assert resp.status_code == 200
+        events = await RabRepository().get_webhook_events_by_issue("DUMMY-LEDGER-1")
+        assert len(events) == 1
+        assert events[0]["event_type"] == "demo.full_approval"
+        assert events[0]["event_id"].startswith("demo:")
+        assert events[0]["status"] == "release_ready"
+
+    def test_webhooks_page_shows_demo_badge(self, client: TestClient) -> None:
+        resp = client.post("/demo/flow", data={"issue_key": "DUMMY-LEDGER-2"})
+        assert resp.status_code == 200
+        body = client.get("/dashboard/webhooks").text
+        assert "DUMMY-LEDGER-2" in body
+        assert "demo.full_approval" in body
+        assert "Demo" in body

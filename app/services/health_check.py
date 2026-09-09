@@ -22,20 +22,74 @@ _health_lock = asyncio.Lock()
 
 
 def _teams_status(settings=None) -> dict:
-    """Teams workflow webhook status — alerting basis only, not approval gating.
+    """Teams workflow webhook status, split by direction.
 
-    NOTE: `connected` here means "configured" — the workflow URL is never probed
+    Outbound (RAB → Teams alerts) is a Power Automate workflow webhook: POST-only
+    by design, so `connected` here means "configured" — the URL is never probed
     (a probe POST would fire a real Teams alert). A configured URL can still fail
     at send time (deleted flow, rotated sig); send failures are logged per alert.
+
+    Inbound (Teams → RAB approvals) is NOT available: no Teams callback receiver
+    is mounted (nothing listens on POST /webhooks/teams or equivalent), and a
+    workflow webhook cannot call back into this service on its own. Approval-
+    through-Teams needs (1) a decision endpoint the flow/bot can POST to and
+    (2) APP_PUBLIC_URL set so Teams/Flow can reach it. `direction` reports
+    "unconfigured" | "outbound-only" | "two-way" so the Overview card can show
+    at a glance which way the connection flows.
     """
     settings = settings if settings is not None else get_settings()
     url = settings.effective_teams_webhook_url
+    # Inbound assessment is shared by all three outbound states below.
+    # NOTE: no Teams callback receiver exists in this codebase yet — if one is
+    # ever mounted (e.g. POST /webhooks/teams), set inbound_supported=True here
+    # (and gate on its auth token) so `direction` flips to "two-way".
+    public_url = (settings.APP_PUBLIC_URL or "").strip()
+    if public_url:
+        inbound_details = (
+            "Inbound approvals NOT available — no Teams callback endpoint is mounted "
+            "(nothing listens on POST /webhooks/teams or equivalent), so Teams cannot "
+            "send decisions back into the system. APP_PUBLIC_URL is set, so reachability "
+            "is ready — mounting an authenticated decision endpoint completes the loop."
+        )
+    else:
+        inbound_details = (
+            "Inbound approvals NOT available — no Teams callback endpoint is mounted "
+            "(nothing listens on POST /webhooks/teams or equivalent), so Teams cannot "
+            "send decisions back into the system. To enable approval-through-Teams: mount "
+            "an authenticated decision endpoint AND set APP_PUBLIC_URL to this service's "
+            "public base URL (Power Automate 'post card and wait for response' flows need it)."
+        )
+    inbound = {"supported": False, "details": inbound_details}
     if not url:
-        return {"connected": False, "configured": False, "details": "Teams workflow webhook not configured — release_ready alerts skipped (set TEAMS_WORKFLOW_WEBHOOK_URL, see scripts/send_to_teams.py)"}
+        return {
+            "connected": False,
+            "configured": False,
+            "details": "Teams workflow webhook not configured — release_ready alerts skipped (set TEAMS_WORKFLOW_WEBHOOK_URL, see scripts/send_to_teams.py)",
+            "direction": "unconfigured",
+            "outbound_details": "Outbound alerts NOT configured — release_ready cards are skipped.",
+            "inbound_supported": inbound["supported"],
+            "inbound_details": inbound["details"],
+        }
     # Basic URL validation (Power Automate URLs are long https://prod-*.logic.azure.com/...)
     if not url.startswith("https://"):
-        return {"connected": False, "configured": True, "details": f"Teams webhook URL looks invalid (must start with https://): {url[:40]}..."}
-    return {"connected": True, "configured": True, "details": "Teams workflow webhook configured (not probed — a probe would fire a real alert) — release_ready alerts enabled (alerting basis)"}
+        return {
+            "connected": False,
+            "configured": True,
+            "details": f"Teams webhook URL looks invalid (must start with https://): {url[:40]}...",
+            "direction": "outbound-only",
+            "outbound_details": "Outbound URL present but invalid (must start with https://) — alerts will fail at send time.",
+            "inbound_supported": inbound["supported"],
+            "inbound_details": inbound["details"],
+        }
+    return {
+        "connected": True,
+        "configured": True,
+        "details": "Teams workflow webhook configured (not probed — a probe would fire a real alert) — release_ready alerts enabled (alerting basis)",
+        "direction": "outbound-only",
+        "outbound_details": "Outbound alerts configured — release_ready AdaptiveCards POST to Teams (workflow URL not probed).",
+        "inbound_supported": inbound["supported"],
+        "inbound_details": inbound["details"],
+    }
 
 
 async def get_service_statuses() -> dict:
@@ -65,11 +119,10 @@ async def get_service_statuses() -> dict:
 
         services = {
             "jira": {"connected": jira_status.get("connected", False), "details": details},
-            "teams": {
-                "connected": teams_status["connected"],
-                "configured": teams_status.get("configured", True),
-                "details": teams_status["details"],
-            },
+            # Pass the full _teams_status dict through (connected/configured/
+            # details/direction/outbound_details/inbound_*) — cherry-picking
+            # here silently dropped the directionality keys once before.
+            "teams": teams_status,
             "_warnings": warnings,
         }
         _health_cache["at"] = now
