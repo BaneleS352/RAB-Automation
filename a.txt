@@ -1,0 +1,846 @@
+PS C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation> uvicorn app.main:app --reload  
+INFO:     Will watch for changes in these directories: ['C:\\Users\\NMukhuba\\OneDrive - HollywoodBets\\Documents\\GitHub\\New folder\\RAB-Automation']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [21940] using WatchFiles
+2026-09-09 11:04:10 | INFO     | app.main | RAB Automation Service started: app=rab-automation, env=local
+INFO:     Started server process [4992]
+INFO:     Waiting for application startup.
+2026-09-09 11:04:10 | INFO     | app.database | Database connection opened: C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\rab_automation.db
+2026-09-09 11:04:10 | INFO     | app.database | Database schema initialized.
+INFO:     Application startup complete.
+2026-09-09 11:04:13 | INFO     | httpx | HTTP Request: GET https://djtough24.atlassian.net/rest/api/3/myself "HTTP/1.1 200 OK"
+2026-09-09 11:11:19 | INFO     | app.services.dummy_flow | Starting dummy RAB flow for DEMO-121
+2026-09-09 11:11:22 | INFO     | httpx | HTTP Request: POST https://djtough24.atlassian.net/rest/api/3/issue "HTTP/1.1 400 Bad Request"
+2026-09-09 11:11:22 | ERROR    | app.services.dummy_flow | Demo Lab Jira ticket creation failed for DEMO-121
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 409, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\metrics.py", line 73, in __call__
+    await self.app(scope, receive, send_wrapper)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\auth.py", line 34, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 163, in call_next
+    raise app_exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 376, in dashboard_demo_run
+    result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 124, in _run_demo_scenario
+    return await svc.run_full_approval(needs_meeting=needs_meeting)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 231, in run_full_approval
+    await self._ensure_real_issue()
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+2026-09-09 11:11:27 | INFO     | app.services.dummy_flow | Starting dummy RAB flow for DEMO-121
+2026-09-09 11:11:30 | INFO     | httpx | HTTP Request: POST https://djtough24.atlassian.net/rest/api/3/issue "HTTP/1.1 400 Bad Request"
+2026-09-09 11:11:30 | ERROR    | app.services.dummy_flow | Demo Lab Jira ticket creation failed for DEMO-121
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 409, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\metrics.py", line 73, in __call__
+    await self.app(scope, receive, send_wrapper)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\auth.py", line 34, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 163, in call_next
+    raise app_exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 376, in dashboard_demo_run
+    result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 124, in _run_demo_scenario
+    return await svc.run_full_approval(needs_meeting=needs_meeting)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 231, in run_full_approval
+    await self._ensure_real_issue()
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-09-09 11:16:21 | INFO     | app.database | Database connection closed.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4992]
+INFO:     Stopping reloader process [21940]
+PS C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation> uvicorn app.main:app --reload
+INFO:     Will watch for changes in these directories: ['C:\\Users\\NMukhuba\\OneDrive - HollywoodBets\\Documents\\GitHub\\New folder\\RAB-Automation']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [14820] using WatchFiles
+2026-09-09 11:29:51 | INFO     | app.main | RAB Automation Service started: app=rab-automation, env=local
+INFO:     Started server process [8772]
+INFO:     Waiting for application startup.
+2026-09-09 11:29:51 | INFO     | app.database | Database connection opened: C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\rab_automation.db
+2026-09-09 11:29:51 | INFO     | app.database | Database schema initialized.
+INFO:     Application startup complete.
+2026-09-09 11:30:22 | INFO     | app.services.dummy_flow | Starting dummy RAB flow for DEMO-121
+2026-09-09 11:30:25 | INFO     | httpx | HTTP Request: POST https://djtough24.atlassian.net/rest/api/3/issue "HTTP/1.1 400 Bad Request"
+2026-09-09 11:30:25 | ERROR    | app.services.dummy_flow | Demo Lab Jira ticket creation failed for DEMO-121
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 409, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\metrics.py", line 73, in __call__
+    await self.app(scope, receive, send_wrapper)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\auth.py", line 34, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 163, in call_next
+    raise app_exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 380, in dashboard_demo_run
+    result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 124, in _run_demo_scenario
+    return await svc.run_full_approval(needs_meeting=needs_meeting)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 231, in run_full_approval
+    await self._ensure_real_issue()
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+WARNING:  WatchFiles detected changes in 'repro_demo.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-09-09 11:30:58 | INFO     | app.database | Database connection closed.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [8772]
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\multiprocessing\spawn.py", line 122, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\multiprocessing\spawn.py", line 132, in _main
+    self = reduction.pickle.load(from_parent)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\__init__.py", line 1, in <module>
+    from uvicorn.config import Config
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\config.py", line 17, in <module>
+    import click
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\__init__.py", line 10, in <module>
+    from .core import Argument as Argument
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\core.py", line 21, in <module>
+    from . import types
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\types.py", line 13, in <module>
+    from ._compat import _get_argv_encoding
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\_compat.py", line 513, in <module>
+    from ._winconsole import _get_windows_console_stream
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\click\_winconsole.py", line 16, in <module>
+    from ctypes import Array
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\ctypes\__init__.py", line 8, in <module>
+    from _ctypes import Union, Structure, Array
+KeyboardInterrupt
+INFO:     Stopping reloader process [14820]
+PS C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation> uvicorn app.main:app --reload
+INFO:     Will watch for changes in these directories: ['C:\\Users\\NMukhuba\\OneDrive - HollywoodBets\\Documents\\GitHub\\New folder\\RAB-Automation']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [396] using WatchFiles
+2026-09-09 11:31:35 | INFO     | app.main | RAB Automation Service started: app=rab-automation, env=local
+INFO:     Started server process [37492]
+INFO:     Waiting for application startup.
+2026-09-09 11:31:35 | INFO     | app.database | Database connection opened: C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\rab_automation.db
+2026-09-09 11:31:35 | INFO     | app.database | Database schema initialized.
+INFO:     Application startup complete.
+2026-09-09 11:31:45 | INFO     | app.services.dummy_flow | Starting dummy RAB flow for DEMO-121
+2026-09-09 11:31:47 | INFO     | httpx | HTTP Request: POST https://djtough24.atlassian.net/rest/api/3/issue "HTTP/1.1 400 Bad Request"
+2026-09-09 11:31:48 | ERROR    | app.services.dummy_flow | Demo Lab Jira ticket creation failed for DEMO-121
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 409, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\metrics.py", line 73, in __call__
+    await self.app(scope, receive, send_wrapper)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\auth.py", line 34, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 163, in call_next
+    raise app_exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 380, in dashboard_demo_run
+    result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 124, in _run_demo_scenario
+    return await svc.run_full_approval(needs_meeting=needs_meeting)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 231, in run_full_approval
+    await self._ensure_real_issue()
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-09-09 11:32:33 | INFO     | app.database | Database connection closed.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [37492]
+INFO:     Stopping reloader process [396]
+PS C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation> ^C
+PS C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation> ^C
+PS C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation> ^C
+PS C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation> uvicorn app.main:app --reload
+INFO:     Will watch for changes in these directories: ['C:\\Users\\NMukhuba\\OneDrive - HollywoodBets\\Documents\\GitHub\\New folder\\RAB-Automation']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [20872] using WatchFiles
+2026-09-09 11:58:45 | INFO     | app.main | RAB Automation Service started: app=rab-automation, env=local
+INFO:     Started server process [18836]
+INFO:     Waiting for application startup.
+2026-09-09 11:58:45 | INFO     | app.database | Database connection opened: C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\rab_automation.db
+2026-09-09 11:58:45 | INFO     | app.database | Database schema initialized.
+INFO:     Application startup complete.
+2026-09-09 11:59:07 | INFO     | httpx | HTTP Request: GET https://djtough24.atlassian.net/rest/api/3/myself "HTTP/1.1 200 OK"
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | Starting dummy RAB flow for DEMO-1
+2026-09-09 11:59:16 | INFO     | app.services.rab_orchestrator | Orchestrator received event: issue_key=DEMO-1, event_type=jira:issue_created
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Fetching issue DEMO-1 (no network)
+2026-09-09 11:59:16 | INFO     | app.services.approval_service | Approval created for DEMO-1: current_step=SDL
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-1 (no network)
+2026-09-09 11:59:16 | INFO     | app.services.rab_orchestrator | Monitor event: Validation Passed
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-1 (no network)
+2026-09-09 11:59:16 | INFO     | app.services.rab_orchestrator | Monitor event: SDL Approval: DEMO-1
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB] validation: approval_requested_sdl
+2026-09-09 11:59:16 | INFO     | app.services.approval_service | SDL approved for DEMO-1 — moving to SDM
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-1 (no network)
+2026-09-09 11:59:16 | INFO     | app.services.rab_orchestrator | Monitor event: Approved by SDL: DEMO-1
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-1 (no network)
+2026-09-09 11:59:16 | INFO     | app.services.rab_orchestrator | Monitor event: SDM Approval: DEMO-1
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB] sdl_approval: SDL approved — SDM approval requested
+2026-09-09 11:59:16 | INFO     | app.services.approval_service | SDM approved for DEMO-1 — all approvals complete
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-1 (no network)
+2026-09-09 11:59:16 | INFO     | app.services.rab_orchestrator | Monitor event: Approved by SDM: DEMO-1
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-1 (no network)
+2026-09-09 11:59:16 | INFO     | app.services.rab_orchestrator | Monitor event: Meeting Decision: DEMO-1
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-1 (no network)
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB] sdm_approval: All approvals complete
+2026-09-09 11:59:16 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-1 (no network)
+2026-09-09 11:59:16 | INFO     | app.services.rab_orchestrator | Monitor event: Release Ready
+2026-09-09 11:59:18 | INFO     | httpx | HTTP Request: POST https://default9ffd11cc7f9b4072ae9424fec1ba3d.90.environment.api.powerplatform.com/powerautomate/automations/direct/cu/29/workflows/73e58ee832924cd1bbb7f51732fade8a/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=senbGAzNmhdaMQZtdmMTkGJscsGrdJTucfiEhGNgSKQ "HTTP/1.1 202 Accepted"
+2026-09-09 11:59:18 | INFO     | app.services.teams_alert | Teams release alert for DEMO-1 — HTTP 202
+2026-09-09 11:59:18 | INFO     | app.services.dummy_flow | [DEMO_LAB] meeting_decision: release_ready
+2026-09-09 11:59:18 | INFO     | app.services.dummy_flow | Dummy RAB flow completed for DEMO-1
+2026-09-09 12:01:55 | INFO     | app.services.dummy_flow | Starting dummy RAB flow for DEMO-121
+2026-09-09 12:01:57 | INFO     | httpx | HTTP Request: POST https://djtough24.atlassian.net/rest/api/3/issue "HTTP/1.1 400 Bad Request"
+2026-09-09 12:01:57 | ERROR    | app.services.dummy_flow | Demo Lab Jira ticket creation failed for DEMO-121
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 409, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\metrics.py", line 73, in __call__
+    await self.app(scope, receive, send_wrapper)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\auth.py", line 34, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 163, in call_next
+    raise app_exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 380, in dashboard_demo_run
+    result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 124, in _run_demo_scenario
+    return await svc.run_full_approval(needs_meeting=needs_meeting)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 231, in run_full_approval
+    await self._ensure_real_issue()
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | Starting dummy RAB flow for DEMO-121
+2026-09-09 12:02:02 | INFO     | app.services.rab_orchestrator | Orchestrator received event: issue_key=DEMO-121, event_type=jira:issue_created
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Fetching issue DEMO-121 (no network)
+2026-09-09 12:02:02 | INFO     | app.services.approval_service | Approval created for DEMO-121: current_step=SDL
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-121 (no network)
+2026-09-09 12:02:02 | INFO     | app.services.rab_orchestrator | Monitor event: Validation Passed
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-121 (no network)
+2026-09-09 12:02:02 | INFO     | app.services.rab_orchestrator | Monitor event: SDL Approval: DEMO-121
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB] validation: approval_requested_sdl
+2026-09-09 12:02:02 | INFO     | app.services.approval_service | SDL approved for DEMO-121 — moving to SDM
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-121 (no network)
+2026-09-09 12:02:02 | INFO     | app.services.rab_orchestrator | Monitor event: Approved by SDL: DEMO-121
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-121 (no network)
+2026-09-09 12:02:02 | INFO     | app.services.rab_orchestrator | Monitor event: SDM Approval: DEMO-121
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB] sdl_approval: SDL approved — SDM approval requested
+2026-09-09 12:02:02 | INFO     | app.services.approval_service | SDM approved for DEMO-121 — all approvals complete
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-121 (no network)
+2026-09-09 12:02:02 | INFO     | app.services.rab_orchestrator | Monitor event: Approved by SDM: DEMO-121
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-121 (no network)
+2026-09-09 12:02:02 | INFO     | app.services.rab_orchestrator | Monitor event: Meeting Decision: DEMO-121
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-121 (no network)
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB] sdm_approval: All approvals complete
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB stub] Comment on DEMO-121 (no network)
+2026-09-09 12:02:02 | INFO     | app.services.rab_orchestrator | Monitor event: Meeting Needed
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | [DEMO_LAB] meeting_decision: meeting_scheduled
+2026-09-09 12:02:02 | INFO     | app.services.dummy_flow | Dummy RAB flow completed for DEMO-121
+2026-09-09 12:02:05 | INFO     | app.services.dummy_flow | Starting dummy RAB flow for DEMO-121
+2026-09-09 12:02:07 | INFO     | httpx | HTTP Request: POST https://djtough24.atlassian.net/rest/api/3/issue "HTTP/1.1 400 Bad Request"
+2026-09-09 12:02:07 | ERROR    | app.services.dummy_flow | Demo Lab Jira ticket creation failed for DEMO-121
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 100, in _request
+    resp.raise_for_status()
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\httpx\_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '400 Bad Request' for url 'https://djtough24.atlassian.net/rest/api/3/issue'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 409, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 187, in __call__
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\errors.py", line 165, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\metrics.py", line 73, in __call__
+    await self.app(scope, receive, send_wrapper)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 185, in __call__
+    with collapse_excgroups():
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\contextlib.py", line 155, in __exit__
+    self.gen.throw(value)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_utils.py", line 82, in collapse_excgroups
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 187, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\auth.py", line 34, in dispatch
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 163, in call_next
+    raise app_exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\base.py", line 149, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 62, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 715, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 735, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 288, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 76, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\starlette\routing.py", line 73, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 301, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\AppData\Local\Programs\Python\Python312\Lib\site-packages\fastapi\routing.py", line 212, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 380, in dashboard_demo_run
+    result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\api\dashboard.py", line 124, in _run_demo_scenario
+    return await svc.run_full_approval(needs_meeting=needs_meeting)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 231, in run_full_approval
+    await self._ensure_real_issue()
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\dummy_flow.py", line 176, in _ensure_real_issue
+    result = await client.create_issue(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 254, in create_issue
+    return await self._post("/rest/api/3/issue", {"fields": fields})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 79, in _post
+    return await self._request("POST", url, body=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NMukhuba\OneDrive - HollywoodBets\Documents\GitHub\New folder\RAB-Automation\app\services\jira_client.py", line 108, in _request
+    raise JiraClientError(f"HTTP {e.response.status_code}: {e.response.text[:300]}", status_code=e.response.status_code) from e
+app.services.jira_client.JiraClientError: HTTP 400: {"errorMessages":[],"errors":{"customfield_10131":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10132":"The field value is not valid Atlassian Document Format (ADF) content.","customfield_10133":"The field value is not valid Atlassian Document Format (ADF) cont
+2026-09-09 12:02:37 | INFO     | httpx | HTTP Request: GET https://djtough24.atlassian.net/rest/api/3/myself "HTTP/1.1 200 OK"
