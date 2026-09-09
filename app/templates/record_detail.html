@@ -11,6 +11,7 @@
 </div>
 
 {% if record %}
+{% if error %}<div class="card result-card result-rejected" style="margin-top:1rem;"><div class="card-body"><strong>Live Jira data unavailable</strong><p>{{ error }}</p><p class="muted">The historical audit snapshot is not presented as current Jira state.</p></div></div>{% endif %}
 <div class="card">
     <div class="card-header">
         <h3>Issue Detail</h3>

@@ -22,10 +22,6 @@
     </div>
     <div class="card-body">
         <form method="post" action="/dashboard/demo" style="display:flex; flex-wrap:wrap; gap:0.9rem; align-items:flex-end;">
-            <label class="field" style="flex:1; min-width:160px;">
-                <span class="detail-label">Issue Key</span>
-                <input type="text" name="issue_key" value="{{ issue_key }}" required pattern="[A-Z]+-[0-9]+">
-            </label>
             <label class="field" style="flex:2; min-width:220px;">
                 <span class="detail-label">Summary</span>
                 <input type="text" name="summary" value="{{ summary }}" style="width:100%;">
@@ -59,7 +55,7 @@
             <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-FAIL"><input type="hidden" name="scenario" value="validation_failed"><button class="btn btn-outline btn-sm">Validation failed</button></form>
             <form method="post" action="/dashboard/demo" style="display:inline;"><input type="hidden" name="issue_key" value="DEMO-AGING"><input type="hidden" name="scenario" value="aging"><button class="btn btn-outline btn-sm">Aging</button></form>
         </div>
-        <p class="muted" style="margin-top:0.75rem;">Every preset creates or reuses a live Jira ticket. If Jira creation fails, no local workflow or audit record is created.</p>
+        <p class="muted" style="margin-top:0.75rem;">Each run creates or reuses a live Jira ticket. The result and audit trail use Jira’s generated issue key.</p>
     </div>
 </div>
 

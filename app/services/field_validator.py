@@ -48,6 +48,10 @@ class FieldValidator:
                 self.field_map[field_key] = field_key
             else:
                 custom = getattr(self.settings, f"JIRA_FIELD_{field_key.upper()}", None)
+                # Jira installations commonly expose this as ENVIRONMENTS even
+                # though the RAB structure has one logical Environment value.
+                if field_key == "environment" and not custom:
+                    custom = getattr(self.settings, "JIRA_FIELD_ENVIRONMENTS", None)
                 # Use explicit None check to allow empty-string config to be distinguished from unset
                 self.field_map[field_key] = custom if custom is not None and custom != "" else None
 
@@ -127,6 +131,13 @@ class FieldValidator:
         if value is None:
             return None
         if isinstance(value, dict):
+            # Jira paragraph/rich-text custom fields are returned as ADF docs.
+            # Do not stringify the document metadata; extract its visible text.
+            if value.get("type") == "doc" and value.get("content") is not None:
+                from app.services.jira_fields import adf_to_text
+
+                text = adf_to_text(value).strip()
+                return text or None
             raw = value.get("displayName") or value.get("value") or value.get("name")
             if isinstance(raw, str):
                 raw = raw.strip()

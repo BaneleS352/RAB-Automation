@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.repositories.rab_repository import RabRepository
 from app.services.jira_client import JiraClient
+from app.services.jira_hydration import hydrate_issue
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/rab", tags=["rab"])
@@ -128,6 +129,11 @@ async def list_records(
 async def get_record(issue_key: str) -> RabRecord:
     row = await _repo.get_record(issue_key)
     if row:
+        try:
+            await hydrate_issue(issue_key, repo=_repo)
+            row = await _repo.get_record(issue_key)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Live Jira hydration failed for {issue_key}: {exc}") from exc
         return RabRecord(**row)
     raise HTTPException(status_code=404, detail=f"Issue {issue_key} not found")
 

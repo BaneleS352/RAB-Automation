@@ -15,14 +15,14 @@
 <div class="card" style="margin-top:1rem;">
     <div class="card-header">
         <h3>Demo Lab</h3>
-        <span class="muted" style="font-size:0.8rem;">Create and iterate synthetic Jira scenarios</span>
+        <span class="muted" style="font-size:0.8rem;">Create and iterate live Jira scenarios</span>
     </div>
     <div class="card-body">
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.9rem; align-items:center;">
             <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdl"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDL"><button class="btn btn-outline btn-sm">Pending SDL</button></form>
             <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdm"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDM"><button class="btn btn-outline btn-sm">Pending SDM</button></form>
-            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="validation_failed"><input type="hidden" name="issue_key" value="DEMO-FAIL"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Validation failed</button></form>
-            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="aging"><input type="hidden" name="issue_key" value="DEMO-AGING"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Aging</button></form>
+            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="validation_failed"><input type="hidden" name="issue_key" value="DEMO-FAIL"><button class="btn btn-outline btn-sm">Validation failed</button></form>
+            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="aging"><input type="hidden" name="issue_key" value="DEMO-AGING"><button class="btn btn-outline btn-sm">Aging</button></form>
             <span class="badge">Live Jira only</span>
         </div>
         {% if cleanup_result %}
@@ -34,10 +34,6 @@
         {% endif %}
         <form method="post" action="/dashboard/tools" style="display:flex; flex-wrap:wrap; gap:0.9rem; align-items:flex-end; padding-top:0.9rem; border-top:1px solid var(--border);">
             <input type="hidden" name="action" value="custom">
-            <label class="field" style="flex:1; min-width:140px;">
-                <span class="detail-label">Issue Key</span>
-                <input type="text" name="issue_key" value="DEMO-1" required pattern="[A-Z]+-[0-9]+">
-            </label>
             <label class="field" style="flex:2; min-width:200px;">
                 <span class="detail-label">Summary</span>
                 <input type="text" name="summary" value="Demo release ticket" style="width:100%;">
@@ -59,7 +55,7 @@
                 <input type="checkbox" name="needs_meeting" value="true">
                 <span>Meeting</span>
             </label>
-            <span class="muted">Each run creates or reuses a live Jira ticket</span>
+            <span class="muted">Each run creates one new live Jira ticket</span>
             <button type="submit" class="btn btn-primary btn-sm">Run →</button>
         </form>
         {% if result %}

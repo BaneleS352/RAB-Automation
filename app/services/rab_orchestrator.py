@@ -1,7 +1,6 @@
 """RAB Orchestrator – processes Jira events through the full RAB workflow (monitor mode)."""
 
 import asyncio
-import json
 import logging
 import uuid
 
@@ -10,56 +9,9 @@ from app.repositories.rab_repository import RabRepository
 from app.services.approval_service import ApprovalService, ApprovalStep
 from app.services.field_validator import FieldValidator
 from app.services.jira_client import JiraClient, JiraClientError
-from app.services.jira_fields import adf_to_text
+from app.services.jira_hydration import snapshot_issue
 from app.services.status_codes import FLOW_STATUSES, RabStatus
 
-
-def _extract_rich_fields_orch(issue: dict, fv: FieldValidator) -> dict:
-    fields = issue.get("fields", {}) or {}
-    summary = fields.get("summary", "") or ""
-    description = adf_to_text(fields.get("description"))
-    priority = (fields.get("priority") or {}).get("name", "") if isinstance(fields.get("priority"), dict) else ""
-    issuetype = (fields.get("issuetype") or {}).get("name", "") if isinstance(fields.get("issuetype"), dict) else ""
-    jira_status = (fields.get("status") or {}).get("name", "") if isinstance(fields.get("status"), dict) else ""
-    labels = ", ".join(fields.get("labels") or []) if isinstance(fields.get("labels"), list) else ""
-    reporter_data = fields.get("reporter") or {}
-    reporter = reporter_data.get("displayName") or reporter_data.get("accountId") or "" if isinstance(reporter_data, dict) else ""
-    creator_data = fields.get("creator") or fields.get("reporter") or {}
-    creator = creator_data.get("displayName") or creator_data.get("accountId") or "" if isinstance(creator_data, dict) else ""
-    assignee_data = fields.get("assignee") or {}
-    assignee = assignee_data.get("displayName") or assignee_data.get("accountId") or "" if isinstance(assignee_data, dict) else ""
-    jira_updated = fields.get("updated") or fields.get("created") or ""
-    # RAB snapshot for raw_fields
-    from app.services.field_validator import REQUIRED_FIELDS
-
-    rab_snapshot: dict[str, str | None] = {}
-    for _, key in REQUIRED_FIELDS:
-        try:
-            rab_snapshot[key] = fv.extract_field_value(issue, key)
-        except Exception:
-            rab_snapshot[key] = None
-    structure_extractor = getattr(fv, "extract_ticket_structure", None)
-    ticket_structure = structure_extractor(issue) if callable(structure_extractor) else {}
-    raw_fields = json.dumps({
-        "rab_fields": rab_snapshot,
-        "ticket_structure": ticket_structure,
-        "field_map": getattr(fv, "field_map", {}),
-        "labels": labels,
-    }, ensure_ascii=False)[:4000]
-    return {
-        "summary": summary,
-        "description": description[:2000],
-        "priority": priority,
-        "issuetype": issuetype,
-        "jira_status": jira_status,
-        "labels": labels[:500],
-        "reporter": reporter,
-        "creator": creator,
-        "assignee": assignee,
-        "jira_updated": jira_updated,
-        "raw_fields": raw_fields,
-        **{key if key != "parent" else "parent_reference": (value or "") for key, value in ticket_structure.items()},
-    }
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +76,7 @@ class RabOrchestrator:
             if not issue_data:
                 return "monitored"
             validation = self.field_validator.validate(issue_data)
-            rich = _extract_rich_fields_orch(issue_data, self.field_validator)
+            rich = snapshot_issue(issue_data, self.field_validator)
             # Advisory: always NOTE present/missing (per drawio: GET and NOTE), do not hard-fail on missing.
             # Store advisory detail even when valid but with missing_fields so dashboard shows completeness.
             strict = self._is_strict()
@@ -199,7 +151,7 @@ class RabOrchestrator:
             # No prior state — proceed with new workflow (validation and rich fields already fetched)
 
             validation = self.field_validator.validate(issue_data)
-            rich = _extract_rich_fields_orch(issue_data, self.field_validator)
+            rich = snapshot_issue(issue_data, self.field_validator)
             # Persist all rich Jira details so dashboard no longer shows blank; previously only creator/assignee were saved
             await self.rab_repo.upsert_record(issue_key, {
                 "summary": rich["summary"],
@@ -430,37 +382,48 @@ class RabOrchestrator:
         if needs_meeting:
             await self._add_comment(issue_key, "RAB Automation: Meeting will be scheduled. Resolving attendees from ticket.")
             await self._send_card("Meeting Needed")
-            return "meeting_scheduled"
         else:
             await self._add_comment(issue_key, "RAB Automation: No meeting needed — release ticket finalized.")
             await self._send_card("Release Ready")
-            # Teams alerting basis only — final release state (per user request; re-uses send_to_teams.py workflow pattern)
-            try:
-                from app.services.teams_alert import send_release_ready_alert
 
-                summary = record.get("summary") if record else ""
-                details = {
-                    "jira_status": record.get("jira_status") if record else "",
-                    "issuetype": record.get("issuetype") if record else "",
-                    "priority": record.get("priority") if record else "",
-                    "assignee": record.get("assignee") if record else "",
-                    "reporter": record.get("reporter") if record else "",
-                    "environment": "",
-                    "labels": record.get("labels") if record else "",
-                    "validation_result": record.get("validation_result") if record else "",
-                }
-                # Try to enrich environment from raw_fields if available
-                if record and record.get("raw_fields"):
-                    try:
-                        import json as _json
+        # Notify once after all approvals, regardless of whether a meeting is
+        # needed. The card carries the meeting decision so it remains accurate.
+        try:
+            from app.services.teams_alert import send_release_ready_alert
 
-                        raw = _json.loads(record["raw_fields"])
-                        env_val = (raw.get("rab_fields") or {}).get("environment")
-                        if env_val:
-                            details["environment"] = env_val
-                    except Exception:
-                        pass
-                await send_release_ready_alert(issue_key, summary, details)
-            except Exception as e:
-                logger.warning("Teams release alert wiring for %s failed (non-blocking): %s", issue_key, e)
-            return "release_ready"
+            summary = record.get("summary") if record else ""
+            details = {
+                "jira_status": record.get("jira_status") if record else "",
+                "issuetype": record.get("issuetype") if record else "",
+                "priority": record.get("priority") if record else "",
+                "assignee": record.get("assignee") if record else "",
+                "reporter": record.get("reporter") if record else "",
+                "environment": "",
+                "labels": record.get("labels") if record else "",
+                "validation_result": record.get("validation_result") if record else "",
+            }
+            details["meeting_needed"] = needs_meeting
+            # Try to enrich environment from raw_fields if available
+            if record and record.get("raw_fields"):
+                try:
+                    import json as _json
+
+                    raw = _json.loads(record["raw_fields"])
+                    env_val = (raw.get("rab_fields") or {}).get("environment")
+                    if env_val:
+                        details["environment"] = env_val
+                except Exception:
+                    pass
+            # Alert delivery is bounded so a slow Power Automate endpoint
+            # cannot make the approval callback appear hung.
+            sent = await asyncio.wait_for(
+                send_release_ready_alert(issue_key, summary, details),
+                timeout=8.0,
+            )
+            if sent:
+                logger.info("Teams post-approval notification delivered for %s", issue_key)
+            else:
+                logger.warning("Teams post-approval notification was not delivered for %s", issue_key)
+        except Exception as e:
+            logger.warning("Teams alert wiring for %s failed (non-blocking): %s", issue_key, e)
+        return "meeting_scheduled" if needs_meeting else "release_ready"

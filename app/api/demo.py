@@ -1,4 +1,4 @@
-"""Demo endpoints — trigger a simulated RAB approval flow for testing/logs."""
+"""Demo endpoints — trigger live Jira-backed RAB scenarios."""
 
 import logging
 
@@ -21,12 +21,12 @@ def _require_demo(request: Request) -> None:
 @router.post("/flow")
 async def run_demo_flow(
     request: Request,
-    issue_key: str = Form("DEMO-1"),
+    issue_key: str = Form(""),
     summary: str = Form("Demo release ticket"),
     needs_meeting: bool = Form(False),
     reject: bool = Form(False),
 ) -> dict:
-    """Run a full simulated SDL → SDM approval flow and return the step log."""
+    """Run a live Jira-backed SDL → SDM approval flow and return the step log."""
     _require_demo(request)
     try:
         service = DummyFlowService(issue_key=issue_key, summary=summary)
@@ -36,9 +36,9 @@ async def run_demo_flow(
         result = await service.run_rejection()
     else:
         result = await service.run_full_approval(needs_meeting=needs_meeting)
-    # Same ledger as the dashboard Demo Lab so synthetic runs show in Webhook Activity.
+    # Same ledger as the dashboard Demo Lab so runs show in Webhook Activity.
     from app.api.dashboard import record_demo_ledger_event
-    await record_demo_ledger_event(issue_key, "rejected" if reject else "full_approval", result.status)
+    await record_demo_ledger_event(result.issue_key, "rejected" if reject else "full_approval", result.status)
     return {
         "issue_key": result.issue_key,
         "status": result.status,

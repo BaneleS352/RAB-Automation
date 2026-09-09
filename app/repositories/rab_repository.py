@@ -38,7 +38,7 @@ class RabRepository:
 
     async def upsert_record(self, issue_key: str, data: dict) -> int:
         self._validate_columns(data, ALLOWED_RAB_COLUMNS)
-        # Demo records are local simulations, never Jira issues.
+        # Demo records are expected to reference live Jira issues.
         if issue_key.startswith("DEMO-"):
             data = {**data, "jira_exists": 0, "jira_last_seen": ""}
         if not data:

@@ -20,7 +20,7 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT = httpx.Timeout(15.0)
+_TIMEOUT = httpx.Timeout(5.0)
 
 
 def _build_release_card(issue_key: str, summary: str, details: dict[str, Any]) -> dict[str, Any]:
@@ -77,6 +77,7 @@ def _build_release_card(issue_key: str, summary: str, details: dict[str, Any]) -
     # Include Jira link explicitly as a fact as well for non-action clients
     facts.extend(facts_seed)
 
+    meeting_needed = bool(details.get("meeting_needed"))
     return {
         "type": "AdaptiveCard",
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
@@ -84,7 +85,7 @@ def _build_release_card(issue_key: str, summary: str, details: dict[str, Any]) -
         "body": [
             {
                 "type": "TextBlock",
-                "text": f"🚀 RAB Release Ready — {issue_key}",
+                "text": f"🚀 RAB Approval Complete — {issue_key}",
                 "size": "Medium",
                 "weight": "Bolder",
                 "wrap": True,
@@ -100,7 +101,11 @@ def _build_release_card(issue_key: str, summary: str, details: dict[str, Any]) -
             {"type": "FactSet", "facts": facts},
             {
                 "type": "TextBlock",
-                "text": "This ticket has passed SDL → SDM and requires no meeting. It is now **release_ready**.",
+                "text": (
+                    "This ticket has passed SDL → SDM. A meeting is scheduled."
+                    if meeting_needed
+                    else "This ticket has passed SDL → SDM and requires no meeting. It is now **release_ready**."
+                ),
                 "wrap": True,
                 "size": "Small",
                 "isSubtle": True,
@@ -127,7 +132,8 @@ async def send_release_ready_alert(issue_key: str, summary: str = "", details: d
     card = _build_release_card(issue_key, summary, details or {})
     import asyncio as _asyncio
 
-    # Bounded retry on rate-limit/transient failures, mirroring JiraClient backoff.
+    # Bounded retry on rate-limit/transient failures. Alerts must not hold the
+    # release workflow open for minutes.
     # Never raises — failures are logged so the RAB state transition still commits.
     for attempt in range(3):
         try:

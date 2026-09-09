@@ -1,6 +1,7 @@
 """Demo Lab scenarios backed exclusively by live Jira tickets."""
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 from app.repositories.rab_repository import RabRepository
@@ -8,6 +9,7 @@ from app.services.approval_service import ApprovalService
 from app.services.rab_orchestrator import RabOrchestrator
 from app.services.jira_client import JiraClient
 from app.services.field_validator import FieldValidator
+from app.services.jira_hydration import hydrate_issue
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -36,7 +38,10 @@ class _DemoPartialValidator:
 class DummyFlowService:
     """Runs Demo Lab scenarios against live Jira; local-only tickets are disabled."""
 
-    def __init__(self, issue_key: str = "DEMO-1", summary: str = "Demo release ticket") -> None:
+    def __init__(self, issue_key: str = "", summary: str = "Demo release ticket") -> None:
+        # The demo key is an internal, stable correlation label only. Keep it
+        # stable so demo_live_keys can reuse the same live Jira issue; Jira's
+        # generated TEST-* key remains the only user-facing issue key.
         self.issue_key = issue_key
         self.summary = summary
         self.creator_name = "Demo Creator"
@@ -63,39 +68,10 @@ class DummyFlowService:
         self.steps.append({"step": step, "detail": detail})
 
     async def _ensure_real_issue(self) -> None:
-        """Reuse the live Jira issue minted for this demo key, or create one.
-
-        Previously EVERY run minted a brand-new live ticket (DEMO-1 → TEST-27,
-        then TEST-28, ...), spamming the project. The demo_key → live_key
-        mapping is persisted in demo_live_keys so re-runs reuse the same
-        ticket; a mapping pointing at a deleted issue is dropped and reminted.
-        """
+        """Create one fresh live Jira issue for this Demo Lab run."""
         client = getattr(self.orchestrator, "jira_client", None)
         if not client or not hasattr(client, "create_issue"):
             return
-        # Keys belonging to the configured project refer to existing Jira issues.
-        # Any other demo key is only a client-side label used to request a new ticket.
-        if self.issue_key and self.issue_key.startswith(f"{self._real_project}-"):
-            return
-        demo_key = self.issue_key
-        mapped = await self.rab_repo.get_demo_live_key(demo_key)
-        if mapped:
-            try:
-                await client.get_issue(mapped, fields="id")
-            except Exception as e:
-                if getattr(e, "status_code", None) == 404:
-                    logger.info("Demo Lab live ticket %s for %s is gone — minting a fresh one", mapped, demo_key)
-                    await self.rab_repo.clear_demo_live_key(demo_key)
-                    mapped = None
-                else:
-                    # Transient Jira error: fail open by minting fresh would
-                    # spam duplicates, so reuse the mapped key and let the flow
-                    # surface the real error if the issue is truly unusable.
-                    logger.warning("Demo Lab could not verify live ticket %s — reusing: %s", mapped, e)
-            if mapped:
-                logger.info("Demo Lab reusing live Jira issue %s for %s", mapped, demo_key)
-                self.issue_key = mapped
-                return
         try:
             from app.config import get_settings
             settings = get_settings()
@@ -164,13 +140,24 @@ class DummyFlowService:
                 project, self.summary, description,
                 issuetype="Task", labels=["demo", "rab-auto", "live-demo"], custom_fields=custom_fields,
             )
-            real_key = result.get("key") or result.get("id")
-            if real_key and real_key != self.issue_key:
-                logger.info("Demo Lab real Jira issue created: %s -> %s (project %s)", self.issue_key, real_key, project)
-                # Remember the mapping so the next run reuses this ticket
-                await self.rab_repo.set_demo_live_key(demo_key, real_key)
-                # Switch to real key for this run
-                self.issue_key = real_key
+            real_key = result.get("key")
+            if not real_key or not re.fullmatch(r"[A-Z][A-Z0-9]+-\d+", str(real_key)):
+                raise RuntimeError(f"Jira creation returned no valid issue key: {result}")
+            logger.info("Demo Lab real Jira issue created: %s (project %s)", real_key, project)
+            self.issue_key = real_key
+            # Assign the live Jira issue to its creator/current API user. This
+            # keeps Assignee a real Jira field and makes the full-spec audit
+            # match what was actually created, rather than inferring it locally.
+            try:
+                myself = await client._get("/rest/api/3/myself")
+                account_id = myself.get("accountId") if isinstance(myself, dict) else None
+                if account_id:
+                    await client.update_issue(real_key, {"assignee": {"accountId": account_id}})
+            except Exception as exc:
+                logger.warning("Could not assign Demo Lab issue %s to its creator: %s", real_key, exc)
+            # Verify and persist the exact Jira payload before any local
+            # workflow state is allowed to start.
+            await hydrate_issue(real_key, client=client, repo=self.rab_repo)
         except Exception:
             logger.exception("Demo Lab Jira ticket creation failed for %s", self.issue_key)
             raise

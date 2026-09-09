@@ -14,6 +14,7 @@ from app.models.responses import JiraWebhookResponse
 from app.models.webhook import JiraWebhookPayload
 from app.repositories.rab_repository import RabRepository
 from app.services.rab_orchestrator import RabOrchestrator
+from app.services.jira_hydration import hydrate_issue
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,7 @@ async def _process_webhook(
     if not changelog or not isinstance(changelog.get("items"), list) or not changelog.get("items"):
         logger.info("Webhook for %s has no changelog; configure Jira webhook to send changelog for field history", issue_key)
     await rab_repo.record_field_changes(issue_key, changelog)
+    await hydrate_issue(issue_key, repo=rab_repo)
 
     result = await orchestrator.handle_jira_event(
         issue_key=issue_key,

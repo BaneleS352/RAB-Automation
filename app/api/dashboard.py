@@ -14,6 +14,8 @@ from app.api.metrics import get_metrics_data
 from app.repositories.rab_repository import RabRepository
 from app.services import health_check as _health_check_mod
 from app.services.dummy_flow import DummyFlowService
+from app.services.jira_client import JiraClient
+from app.services.jira_hydration import hydrate_issue
 from app.services.test_runner import run_test_suite, TestRunResult
 from app.services.status_codes import KNOWN_STATUSES as STATUS_CODE_KNOWN_STATUSES
 
@@ -65,6 +67,7 @@ def status_badge(value: object) -> str:
 templates.env.filters["status_badge"] = status_badge
 
 _repo = RabRepository()
+_jira = JiraClient()
 # NOTE: JiraClient is constructed per request (not at import) so credential
 # changes take effect without a restart. Do not add a module-level singleton here.
 
@@ -104,7 +107,7 @@ def _require_real_jira(_requested: bool = True) -> bool:
     return True
 
 
-# Scenario name → DummyFlowService method. Single dispatch table shared by the
+# Scenario name → DemoFlowService method. Single dispatch table shared by the
 # Tools and Demo handlers so new scenarios are added in one place (previously
 # two parallel if/elif chains that already drifted once).
 _SCENARIO_METHODS = {
@@ -119,7 +122,7 @@ _SCENARIO_METHODS = {
 
 
 async def _run_demo_scenario(svc, scenario: str, *, needs_meeting: bool = False, reject: bool = False):
-    """Run one named demo scenario (or the default full flow) on a DummyFlowService."""
+    """Run one named Demo Lab scenario against a live Jira ticket."""
     if scenario == "full" or not scenario:
         return await svc.run_full_approval(needs_meeting=needs_meeting)
     method_name = _SCENARIO_METHODS.get(scenario)
@@ -133,12 +136,12 @@ async def _run_demo_scenario(svc, scenario: str, *, needs_meeting: bool = False,
 
 
 async def record_demo_ledger_event(issue_key: str, scenario: str, fallback_status: str = "") -> None:
-    """Write a synthetic ledger entry so Demo/Tools runs show in Webhook Activity.
+    """Write a Demo Lab ledger entry so runs show in Webhook Activity.
 
     Real Jira deliveries arrive via POST /webhooks/jira; Demo Lab and Tools drive
     the orchestrator directly and previously left the ledger (and the Webhooks
     page) permanently empty. Entries use a `demo.*` event_type plus a `demo:`-
-    prefixed random event_id so they read as synthetic and can never collide
+    prefixed random event_id so they cannot collide
     with real deliveries. Fire-and-forget: a ledger failure must never break a
     demo run, so all errors are swallowed to a warning.
     """
@@ -248,6 +251,27 @@ async def dashboard_record_detail(request: Request, issue_key: str) -> HTMLRespo
             request, "record_detail.html", {"record": None, "events": [], "issue_key": issue_key},
             status_code=404,
         )
+    # The audit row is historical state. Refresh Jira-backed display fields
+    # from the source ticket so the page cannot silently show stale local
+    # summary/status/people/details after Jira changes.
+    try:
+        live_issue = await hydrate_issue(issue_key, client=_jira, repo=_repo)
+        live_fields = live_issue.get("fields", {}) or {}
+        record.update({
+            "summary": live_fields.get("summary", record.get("summary", "")),
+            "jira_status": (live_fields.get("status") or {}).get("name", record.get("jira_status", "")),
+            "priority": (live_fields.get("priority") or {}).get("name", record.get("priority", "")),
+            "issuetype": (live_fields.get("issuetype") or {}).get("name", record.get("issuetype", "")),
+            "labels": ", ".join(live_fields.get("labels") or []) or record.get("labels", ""),
+            "jira_updated": live_fields.get("updated", record.get("jira_updated", "")),
+        })
+    except Exception as exc:
+        logger.warning("Could not refresh live Jira details for %s", issue_key, exc_info=True)
+        return templates.TemplateResponse(
+            request, "record_detail.html",
+            {"record": record, "events": [], "field_changes": [], "webhook_events": [], "issue_key": issue_key, "error": f"Live Jira data unavailable: {exc}"},
+            status_code=503,
+        )
     events = await _repo.get_approval_events(issue_key)
     field_changes = await _repo.get_field_changes(issue_key)
     webhook_events = await _repo.get_webhook_events_by_issue(issue_key, limit=20)
@@ -280,11 +304,10 @@ async def dashboard_tools(request: Request) -> HTMLResponse:
 async def dashboard_tools_run(
     request: Request,
     action: str = Form(""),
-    issue_key: str = Form("DEMO-1"),
+    issue_key: str = Form(""),
     summary: str = Form("Demo release ticket"),
     scenario: str = Form(""),
     needs_meeting: bool = Form(False),
-    use_real_jira: bool = Form(False),
 ) -> HTMLResponse:
     _require_feature(request, "ENABLE_DEMO")
     data = get_metrics_data()
@@ -319,7 +342,7 @@ async def dashboard_tools_run(
         result = await _run_demo_scenario(svc, scenario, needs_meeting=needs_meeting)
     if result is not None:
         scenario_name = action if action != "custom" else (scenario or "full_approval")
-        await record_demo_ledger_event(issue_key, scenario_name, result.status)
+        await record_demo_ledger_event(result.issue_key, scenario_name, result.status)
         # Re-fetch so the just-written demo.* row is visible without a manual
         # refresh (events/data above are pre-run snapshots; cleanup branch already did this).
         events = await _repo.get_webhook_events(limit=20)
@@ -330,14 +353,13 @@ async def dashboard_tools_run(
 @router.get("/demo", response_class=HTMLResponse)
 async def dashboard_demo_form(
     request: Request,
-    issue_key: str = Query("DEMO-1"),
+    issue_key: str = Query(""),
     summary: str = Query("Demo release ticket"),
     needs_meeting: bool = Query(False),
     reject: bool = Query(False),
     scenario: str = Query(""),
-    use_real_jira: bool = Query(False),
 ) -> HTMLResponse:
-    """Render the demo approval flow form page. Now supports real Jira tickets (live) vs stub."""
+    """Render the live Jira-backed Demo Lab form."""
     _require_feature(request, "ENABLE_DEMO")
     from app.config import get_settings
     s = get_settings()
@@ -352,7 +374,6 @@ async def dashboard_demo_form(
             "needs_meeting": needs_meeting,
             "reject": reject,
             "scenario": scenario,
-            "use_real_jira": use_real_jira,
             "real_available": real_available,
         },
     )
@@ -361,12 +382,11 @@ async def dashboard_demo_form(
 @router.post("/demo", response_class=HTMLResponse)
 async def dashboard_demo_run(
     request: Request,
-    issue_key: str = Form("DEMO-1"),
+    issue_key: str = Form(""),
     summary: str = Form("Demo release ticket"),
     needs_meeting: bool = Form(False),
     reject: bool = Form(False),
     scenario: str = Form(""),
-    use_real_jira: bool = Form(False),
 ) -> HTMLResponse:
     """Run the demo approval flow and render the result. Real Jira mode creates live tickets."""
     _require_feature(request, "ENABLE_DEMO")
@@ -394,12 +414,11 @@ async def dashboard_demo_run(
                 "needs_meeting": needs_meeting,
                 "reject": reject,
                 "scenario": scenario,
-                "use_real_jira": True,
                 "real_available": real_available,
             },
             status_code=502,
         )
-    await record_demo_ledger_event(issue_key, scenario or "full_approval", result.status)
+    await record_demo_ledger_event(result.issue_key, scenario or "full_approval", result.status)
     return templates.TemplateResponse(
         request,
         "demo.html",
@@ -410,7 +429,6 @@ async def dashboard_demo_run(
             "needs_meeting": needs_meeting,
             "reject": reject,
             "scenario": scenario,
-            "use_real_jira": use_real_jira,
             "real_available": real_available,
         },
     )
