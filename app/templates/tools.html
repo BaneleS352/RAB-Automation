@@ -19,11 +19,11 @@
     </div>
     <div class="card-body">
         <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.9rem; align-items:center;">
-            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdl"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDL"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Pending SDL</button></form>
-            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdm"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDM"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Pending SDM</button></form>
+            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdl"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDL"><button class="btn btn-outline btn-sm">Pending SDL</button></form>
+            <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="pending_sdm"><input type="hidden" name="issue_key" value="DEMO-PENDING-SDM"><button class="btn btn-outline btn-sm">Pending SDM</button></form>
             <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="validation_failed"><input type="hidden" name="issue_key" value="DEMO-FAIL"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Validation failed</button></form>
             <form method="post" action="/dashboard/tools" style="display:inline;"><input type="hidden" name="action" value="aging"><input type="hidden" name="issue_key" value="DEMO-AGING"><input type="hidden" name="use_real_jira" value="false"><button class="btn btn-outline btn-sm">Aging</button></form>
-            <span class="badge">Quick presets run offline (stub) — use the form below for live Jira</span>
+            <span class="badge">Live Jira only</span>
         </div>
         {% if cleanup_result %}
         <div style="margin-bottom:0.9rem; padding:0.75rem; background:var(--success-soft); border:1px solid var(--success-border); border-radius:var(--radius);">
@@ -59,10 +59,7 @@
                 <input type="checkbox" name="needs_meeting" value="true">
                 <span>Meeting</span>
             </label>
-            <label class="field checkbox-field" title="Create a real Jira ticket via the Jira API (requires Jira config); unchecked runs offline with a stub ticket">
-                <input type="checkbox" name="use_real_jira" value="true">
-                <span>Use real Jira ticket</span>
-            </label>
+            <span class="muted">Each run creates or reuses a live Jira ticket</span>
             <button type="submit" class="btn btn-primary btn-sm">Run →</button>
         </form>
         {% if result %}

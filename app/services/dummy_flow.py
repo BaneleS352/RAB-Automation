@@ -20,50 +20,6 @@ class DummyFlowResult:
     status: str = "ok"
 
 
-class StubJiraClient:
-    """In-memory stub Jira client for offline/tests — performs no network I/O."""
-
-    def __init__(self, issue_key: str, summary: str) -> None:
-        self.issue_key = issue_key
-        self.summary = summary
-
-    async def get_issue(self, issue_key: str) -> dict:
-        logger.info("[DEMO_LAB stub] Fetching issue %s (no network)", issue_key)
-        return {
-            "key": self.issue_key,
-            "fields": {
-                "summary": self.summary,
-                "description": {
-                    "type": "doc",
-                    "version": 1,
-                    "content": [{"type": "paragraph", "content": [{"type": "text", "text": self.summary}]}],
-                },
-                "assignee": {"displayName": "Demo Dev"},
-                "reporter": {"displayName": "Demo PM"},
-                "creator": {"displayName": "Demo Creator"},
-                "status": {"name": "Open"},
-                "issuetype": {"name": "Task"},
-                "priority": {"name": "Medium"},
-                "labels": ["demo"],
-            },
-        }
-
-    async def add_comment(self, issue_key: str, body: str) -> dict:
-        logger.info("[DEMO_LAB stub] Comment on %s (no network)", issue_key)
-        return {}
-
-    async def transition_issue(self, issue_key: str, transition_id: str) -> dict:
-        logger.info("[DEMO_LAB stub] Transition on %s (no network)", issue_key)
-        return {}
-
-
-class _DemoPassValidator:
-    """Validator that always passes for demo — avoids fail-closed on missing JIRA_FIELD_* mappings."""
-    def validate(self, issue_data: dict):
-        return type("V", (), {"valid": True, "detail": "All required fields are present.", "missing_fields": []})()
-    def extract_field_value(self, *a, **kw): return "demo"
-
-
 class _DemoPartialValidator:
     """Validator that simulates advisory validated_with_notes — only 4/12 present per drawio Power Automate check."""
     def validate(self, issue_data: dict):
@@ -80,25 +36,18 @@ class _DemoPartialValidator:
 class DummyFlowService:
     """Runs Demo Lab scenarios against live Jira; local-only tickets are disabled."""
 
-    def __init__(self, issue_key: str = "DEMO-1", summary: str = "Demo release ticket", use_real_jira: bool = False) -> None:
+    def __init__(self, issue_key: str = "DEMO-1", summary: str = "Demo release ticket") -> None:
         self.issue_key = issue_key
         self.summary = summary
         self.creator_name = "Demo Creator"
-        self.use_real_jira = use_real_jira
         self.approval_service = ApprovalService()
         self.rab_repo = RabRepository()
         settings = get_settings()
-        if use_real_jira:
-            jira_client = JiraClient()
-            self.jira_client = jira_client
-            if not jira_client.base_url or not jira_client.email or not jira_client.api_token:
-                raise RuntimeError("Demo Lab requires configured Jira credentials; local-only synthetic tickets are disabled")
-            validator: object = FieldValidator()
-        else:
-            stub = StubJiraClient(issue_key, summary)
-            self.jira_client = stub
-            jira_client = stub  # type: ignore[assignment]
-            validator = _DemoPassValidator()
+        jira_client = JiraClient()
+        self.jira_client = jira_client
+        if not jira_client.base_url or not jira_client.email or not jira_client.api_token:
+            raise RuntimeError("Demo Lab requires configured Jira credentials; local-only synthetic tickets are disabled")
+        validator: object = FieldValidator()
         self._real_project = settings.JIRA_PROJECT_KEY or "TEST"
 
         self.orchestrator = RabOrchestrator(
@@ -121,8 +70,6 @@ class DummyFlowService:
         mapping is persisted in demo_live_keys so re-runs reuse the same
         ticket; a mapping pointing at a deleted issue is dropped and reminted.
         """
-        if not self.use_real_jira:
-            return
         client = getattr(self.orchestrator, "jira_client", None)
         if not client or not hasattr(client, "create_issue"):
             return
@@ -194,7 +141,22 @@ class DummyFlowService:
             for name, value in field_values.items():
                 field_id = getattr(settings, f"JIRA_FIELD_{name}", "")
                 if field_id:
-                    custom_fields[field_id] = value
+                    # Jira paragraph/rich-text custom fields require ADF;
+                    # plain text fields (links, names, dates) remain strings.
+                    if name in {
+                        "ROLLBACK_DETAILS", "DEPLOYMENT_INSTRUCTIONS", "OUTCOME_NOTES",
+                        "ROLLBACK_STRATEGY", "MITIGATION_STRATEGY",
+                    }:
+                        custom_fields[field_id] = {
+                            "type": "doc",
+                            "version": 1,
+                            "content": [{
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": value}],
+                            }],
+                        }
+                    else:
+                        custom_fields[field_id] = value
             # Create with Jira's portable core fields. Priority and assignee are
             # project-specific and frequently cause create failures; the
             # workflow can enrich the issue after creation when configured.

@@ -89,7 +89,7 @@ def _require_feature(request: Request, feature: str) -> None:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
-def _require_real_jira(use_real_jira: bool) -> bool:
+def _require_real_jira(_requested: bool = True) -> bool:
     """Unify the real-Jira gate for Demo Lab and Tools.
 
     Returns the effective flag. Raises 503 when real Jira is requested but
@@ -99,9 +99,9 @@ def _require_real_jira(use_real_jira: bool) -> bool:
     from app.config import get_settings
     s = get_settings()
     real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
-    if use_real_jira and not real_available:
-        raise HTTPException(status_code=503, detail="Real Jira requested but Jira credentials are not configured")
-    return bool(use_real_jira and real_available)
+    if not real_available:
+        raise HTTPException(status_code=503, detail="Live Jira ticket creation requires Jira credentials")
+    return True
 
 
 # Scenario name → DummyFlowService method. Single dispatch table shared by the
@@ -298,7 +298,8 @@ async def dashboard_tools_run(
         events = await _repo.get_webhook_events(limit=20)
     elif action in ("pending_sdl", "pending_sdm", "validation_failed", "aging"):
         try:
-            svc = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=_require_real_jira(use_real_jira))
+            _require_real_jira()
+            svc = DummyFlowService(issue_key=issue_key, summary=summary)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         if action == "pending_sdl":
@@ -311,7 +312,8 @@ async def dashboard_tools_run(
             result = await svc.run_aging_pending(days=3)
     elif action == "custom":
         try:
-            svc = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=_require_real_jira(use_real_jira))
+            _require_real_jira()
+            svc = DummyFlowService(issue_key=issue_key, summary=summary)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
         result = await _run_demo_scenario(svc, scenario, needs_meeting=needs_meeting)
@@ -371,13 +373,32 @@ async def dashboard_demo_run(
     from app.config import get_settings
     s = get_settings()
     real_available = bool(s.JIRA_BASE_URL and s.JIRA_EMAIL and s.JIRA_API_TOKEN)
-    eff_real = _require_real_jira(use_real_jira)
+    _require_real_jira()
     try:
-        service = DummyFlowService(issue_key=issue_key, summary=summary, use_real_jira=eff_real)
+        service = DummyFlowService(issue_key=issue_key, summary=summary)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     # Scenario takes precedence over legacy reject/needs_meeting flags
-    result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
+    try:
+        result = await _run_demo_scenario(service, scenario, needs_meeting=needs_meeting, reject=reject)
+    except Exception as exc:
+        logger.exception("Demo Lab scenario failed before completion")
+        return templates.TemplateResponse(
+            request,
+            "demo.html",
+            {
+                "result": None,
+                "error": f"Live Jira ticket was not created or the scenario failed: {exc}",
+                "issue_key": issue_key,
+                "summary": summary,
+                "needs_meeting": needs_meeting,
+                "reject": reject,
+                "scenario": scenario,
+                "use_real_jira": True,
+                "real_available": real_available,
+            },
+            status_code=502,
+        )
     await record_demo_ledger_event(issue_key, scenario or "full_approval", result.status)
     return templates.TemplateResponse(
         request,
